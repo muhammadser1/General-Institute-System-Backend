@@ -19,19 +19,19 @@ class Config:
     MONGO_DATABASE = os.getenv("MONGO_DATABASE", "institute_db")
     
     # JWT Security
-    JWT_SECRET_KEY = os.getenv("SECRET_KEY")
+    JWT_SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production-minimum-32-characters")
     ALGORITHM = os.getenv("ALGORITHM", "HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "3000"))
     
     # Email Settings
     EMAIL_USER = os.getenv("EMAIL_USER")
     EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-    EMAIL_FROM = os.getenv("EMAIL_FROM")
+    EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@institute.com")
     EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-    EMAIL_SERVER = os.getenv("EMAIL_SERVER")
+    EMAIL_SERVER = os.getenv("EMAIL_SERVER", "smtp.gmail.com")
     
     # CORS Settings
-    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
     
     @classmethod
     def get_allowed_origins_list(cls):
