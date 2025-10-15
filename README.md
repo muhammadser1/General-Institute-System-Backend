@@ -24,3 +24,13 @@ python scripts\databases_scriptis\setup_database.py
 # 6. Run server
 uvicorn app.main:app --reload
 ```
+
+
+# Run all tests (user + admin)
+pytest
+
+# Run only admin tests
+pytest tests/admin/ -v
+
+# Run with coverage
+pytest --cov=app --cov-report=html
