@@ -1,12 +1,13 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional, Dict
-from app.schemas.user import UserCreate, UserResponse, UserUpdate, ChangePasswordRequest
+from app.schemas.user import UserCreate, UserResponse, UserUpdate, ChangePasswordRequest, UserRole, UserStatus
 from app.schemas.earnings import (
     TeacherEarningsReport,
     SubjectEarnings,
     AllSubjectPricesResponse,
     SubjectPriceResponse
 )
+from app.models.user import User
 from app.core.security import get_password_hash
 from app.core.pricing import (
     get_subject_price,
@@ -33,62 +34,57 @@ def create_user(
     Admin creates a new user (teacher or admin)
     Only admin can access this endpoint
     """
-    # Check if username already exists
-    existing_user = mongo_db.users_collection.find_one({"username": user_data.username})
-    if existing_user:
+    # Check if username already exists using model method
+    if User.username_exists(user_data.username, mongo_db.users_collection):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already exists",
         )
     
     # If creating admin, email is required
-    if user_data.role == "admin" and not user_data.email:
+    if user_data.role == UserRole.ADMIN and not user_data.email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email is required for admin users",
         )
     
-    # Check if email already exists (if provided)
-    if user_data.email:
-        existing_email = mongo_db.users_collection.find_one({"email": user_data.email})
-        if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already exists",
-            )
+    # Check if email already exists (if provided) using model method
+    if user_data.email and User.email_exists(user_data.email, mongo_db.users_collection):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already exists",
+        )
     
-    # Create user document
-    new_user = {
-        "username": user_data.username,
-        "password": get_password_hash(user_data.password),
-        "role": user_data.role.value,
-        "status": "active",
-        "email": user_data.email,
-        "first_name": user_data.first_name,
-        "last_name": user_data.last_name,
-        "phone": user_data.phone,
-        "birthdate": user_data.birthdate,
-        "created_at": datetime.utcnow(),
-        "last_login": None,
-        "updated_at": None
-    }
+    # Create user using User model
+    new_user = User(
+        username=user_data.username,
+        hashed_password=get_password_hash(user_data.password),
+        role=user_data.role,
+        status=UserStatus.ACTIVE,
+        email=user_data.email,
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        phone=user_data.phone,
+        birthdate=user_data.birthdate,
+    )
     
-    result = mongo_db.users_collection.insert_one(new_user)
-    new_user["_id"] = result.inserted_id
+    # Save to database using model method
+    new_user.save(mongo_db.users_collection)
     
+    # Return user response
     return UserResponse(
-        id=str(new_user["_id"]),
-        username=new_user["username"],
-        role=new_user["role"],
-        status=new_user["status"],
-        email=new_user.get("email"),
-        first_name=new_user.get("first_name"),
-        last_name=new_user.get("last_name"),
-        phone=new_user.get("phone"),
-        birthdate=new_user.get("birthdate"),
-        last_login=new_user.get("last_login"),
-        created_at=new_user["created_at"],
-        updated_at=new_user.get("updated_at"),
+        id=new_user._id,
+        username=new_user.username,
+        role=new_user.role,
+        status=new_user.status,
+        email=new_user.email,
+        first_name=new_user.first_name,
+        last_name=new_user.last_name,
+        phone=new_user.phone,
+        birthdate=new_user.birthdate,
+        last_login=new_user.last_login,
+        created_at=new_user.created_at,
+        updated_at=new_user.updated_at,
     )
 
 
@@ -135,17 +131,10 @@ def get_user(
     current_admin: Dict = Depends(get_current_admin)
 ):
     """
-    Admin gets a specific user
+    Admin gets a specific user by ID
     """
-    from bson import ObjectId
-    
-    try:
-        user = mongo_db.users_collection.find_one({"_id": ObjectId(user_id)})
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invalid user ID",
-        )
+    # Find user by ID using model method
+    user = User.find_by_id(user_id, mongo_db.users_collection)
     
     if not user:
         raise HTTPException(
@@ -154,18 +143,21 @@ def get_user(
         )
     
     return UserResponse(
-        id=str(user["_id"]),
-        username=user["username"],
-        role=user["role"],
-        status=user["status"],
-        email=user.get("email"),
-        first_name=user.get("first_name"),
-        last_name=user.get("last_name"),
-        phone=user.get("phone"),
-        last_login=user.get("last_login"),
-        created_at=user["created_at"],
-        updated_at=user.get("updated_at"),
+        id=user._id,
+        username=user.username,
+        role=user.role,
+        status=user.status,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        phone=user.phone,
+        birthdate=user.birthdate,
+        last_login=user.last_login,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
     )
+
+
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
@@ -175,17 +167,10 @@ def update_user(
     current_admin: Dict = Depends(get_current_admin)
 ):
     """
-    Admin updates a user
+    Admin updates a user's information
     """
-    from bson import ObjectId
-    
-    try:
-        user = mongo_db.users_collection.find_one({"_id": ObjectId(user_id)})
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invalid user ID",
-        )
+    # Find user using model method
+    user = User.find_by_id(user_id, mongo_db.users_collection)
     
     if not user:
         raise HTTPException(
@@ -193,52 +178,86 @@ def update_user(
             detail="User not found",
         )
     
-    # Update fields
+    # Prepare update data (exclude unset fields)
     update_data = user_update.model_dump(exclude_unset=True)
     
     # Check username uniqueness if updating
-    if "username" in update_data and update_data["username"] != user["username"]:
-        existing = mongo_db.users_collection.find_one({"username": update_data["username"]})
-        if existing:
+    if "username" in update_data and update_data["username"] != user.username:
+        if User.username_exists(update_data["username"], mongo_db.users_collection):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already exists",
             )
     
     # Check email uniqueness if updating
-    if "email" in update_data and update_data.get("email") != user.get("email"):
-        existing = mongo_db.users_collection.find_one({"email": update_data["email"]})
-        if existing:
+    if "email" in update_data and update_data.get("email") != user.email:
+        if User.email_exists(update_data["email"], mongo_db.users_collection):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already exists",
             )
     
-    # Add updated_at timestamp
-    update_data["updated_at"] = datetime.utcnow()
+    # Convert enums to values for database
+    if "role" in update_data:
+        update_data["role"] = update_data["role"].value
+    if "status" in update_data:
+        update_data["status"] = update_data["status"].value
     
-    # Update in database
-    mongo_db.users_collection.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$set": update_data}
-    )
+    # Update in database using model method
+    user.update_in_db(mongo_db.users_collection, update_data)
     
     # Get updated user
-    updated_user = mongo_db.users_collection.find_one({"_id": ObjectId(user_id)})
+    updated_user = User.find_by_id(user_id, mongo_db.users_collection)
     
     return UserResponse(
-        id=str(updated_user["_id"]),
-        username=updated_user["username"],
-        role=updated_user["role"],
-        status=updated_user["status"],
-        email=updated_user.get("email"),
-        first_name=updated_user.get("first_name"),
-        last_name=updated_user.get("last_name"),
-        phone=updated_user.get("phone"),
-        last_login=updated_user.get("last_login"),
-        created_at=updated_user["created_at"],
-        updated_at=updated_user.get("updated_at"),
+        id=updated_user._id,
+        username=updated_user.username,
+        role=updated_user.role,
+        status=updated_user.status,
+        email=updated_user.email,
+        first_name=updated_user.first_name,
+        last_name=updated_user.last_name,
+        phone=updated_user.phone,
+        birthdate=updated_user.birthdate,
+        last_login=updated_user.last_login,
+        created_at=updated_user.created_at,
+        updated_at=updated_user.updated_at,
     )
+
+
+@router.delete("/users/{user_id}")
+def deactivate_user(
+    user_id: str,
+    current_admin: Dict = Depends(get_current_admin)
+):
+    """
+    Admin deactivates a user (soft delete - sets status to inactive)
+    Does not actually delete the user from database
+    """
+    # Find user using model method
+    user = User.find_by_id(user_id, mongo_db.users_collection)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    # Check if user is already inactive
+    if user.status == UserStatus.INACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is already inactive",
+        )
+    
+    # Soft delete: Change status to inactive using model method
+    user.update_in_db(mongo_db.users_collection, {"status": UserStatus.INACTIVE.value})
+    
+    return {
+        "message": "User deactivated successfully",
+        "user_id": user_id,
+        "status": "inactive"
+    }
 
 
 @router.post("/users/{user_id}/reset-password")
@@ -250,15 +269,8 @@ def reset_user_password(
     """
     Admin resets a user's password
     """
-    from bson import ObjectId
-    
-    try:
-        user = mongo_db.users_collection.find_one({"_id": ObjectId(user_id)})
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invalid user ID",
-        )
+    # Find user using model method
+    user = User.find_by_id(user_id, mongo_db.users_collection)
     
     if not user:
         raise HTTPException(
@@ -266,88 +278,14 @@ def reset_user_password(
             detail="User not found",
         )
     
-    # Update password
-    mongo_db.users_collection.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$set": {
-            "password": get_password_hash(password_data.new_password),
-            "updated_at": datetime.utcnow()
-        }}
+    # Update password using model method
+    user.update_in_db(
+        mongo_db.users_collection,
+        {"hashed_password": get_password_hash(password_data.new_password)}
     )
     
-    return {"message": "Password reset successfully"}
+    return {"message": "Password reset successfully", "user_id": user_id}
 
-
-@router.delete("/users/{user_id}")
-def delete_user(
-    user_id: str,
-    current_admin: Dict = Depends(get_current_admin)
-):
-    """
-    Admin deletes a user
-    """
-    from bson import ObjectId
-    
-    try:
-        user = mongo_db.users_collection.find_one({"_id": ObjectId(user_id)})
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invalid user ID",
-        )
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-    
-    mongo_db.users_collection.delete_one({"_id": ObjectId(user_id)})
-    return {"message": "User deleted successfully"}
-
-
-@router.get("/teachers-birthdays", response_model=List[UserResponse])
-def get_teachers_birthdays(
-    current_admin: Dict = Depends(get_current_admin)
-):
-    """
-    Get teachers whose birthday is today
-    """
-    from datetime import date
-    
-    today = date.today()
-    
-    # Get all teachers
-    teachers = list(mongo_db.users_collection.find({"role": "teacher"}))
-    
-    # Filter by birthday
-    birthday_teachers = []
-    for teacher in teachers:
-        if teacher.get("birthdate"):
-            birthdate = teacher["birthdate"]
-            # Check if month and day match today
-            if isinstance(birthdate, datetime):
-                if birthdate.month == today.month and birthdate.day == today.day:
-                    birthday_teachers.append(teacher)
-    
-    # Convert to response
-    return [
-        UserResponse(
-            id=str(teacher["_id"]),
-            username=teacher["username"],
-            role=teacher["role"],
-            status=teacher["status"],
-            email=teacher.get("email"),
-            first_name=teacher.get("first_name"),
-            last_name=teacher.get("last_name"),
-            phone=teacher.get("phone"),
-            birthdate=teacher.get("birthdate"),
-            last_login=teacher.get("last_login"),
-            created_at=teacher["created_at"],
-            updated_at=teacher.get("updated_at"),
-        )
-        for teacher in birthday_teachers
-    ]
 
 
 @router.get("/teacher-earnings/{teacher_id}", response_model=TeacherEarningsReport)
@@ -362,14 +300,8 @@ def get_teacher_earnings(
     Shows total hours per subject, price per hour, and total payment.
     Optionally filter by month and/or year.
     """
-    # Verify teacher exists
-    try:
-        teacher = mongo_db.users_collection.find_one({"_id": ObjectId(teacher_id)})
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invalid teacher ID",
-        )
+    # Verify teacher exists using model method
+    teacher = User.find_by_id(teacher_id, mongo_db.users_collection)
     
     if not teacher:
         raise HTTPException(
@@ -377,7 +309,8 @@ def get_teacher_earnings(
             detail="Teacher not found",
         )
     
-    if teacher["role"] != "teacher":
+    # Check if user is a teacher using model method
+    if not teacher.is_teacher():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not a teacher",
@@ -447,9 +380,8 @@ def get_teacher_earnings(
     # Sort by subject name then lesson_type
     subject_earnings_list.sort(key=lambda x: (x.subject, x.lesson_type))
     
-    teacher_name = f"{teacher.get('first_name', '')} {teacher.get('last_name', '')}".strip()
-    if not teacher_name:
-        teacher_name = teacher["username"]
+    # Get teacher name using model method
+    teacher_name = teacher.get_full_name()
     
     return TeacherEarningsReport(
         teacher_id=teacher_id,

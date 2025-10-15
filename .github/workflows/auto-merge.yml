@@ -1,52 +1,38 @@
 name: Auto Merge to Develop
 
 on:
-  # Trigger when PR checks complete
-  pull_request_target:
+  # Only trigger when PR is ready and tests are complete
+  pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [ develop ]  # Only auto-merge to develop
-  check_suite:
-    types: [completed]
+    branches: [develop]
 
 jobs:
   auto-merge:
     name: Auto Merge to Develop Branch
     runs-on: ubuntu-latest
-    
-    # Only auto-merge PRs targeting develop branch
-    # NEVER auto-merge to main (main is manual only)
+
+    # Run only if:
+    # - The PR targets 'develop'
+    # - It’s not a draft
+    # - All required checks have passed
     if: |
+      github.event.pull_request &&
       github.event.pull_request.base.ref == 'develop' &&
       github.event.pull_request.draft == false &&
       (
-        contains(github.event.pull_request.labels.*.name, 'automerge') ||
-        startsWith(github.event.pull_request.head.ref, 'dependabot/') ||
         startsWith(github.event.pull_request.head.ref, 'feature/') ||
-        startsWith(github.event.pull_request.head.ref, 'bugfix/')
+        startsWith(github.event.pull_request.head.ref, 'bugfix/') ||
+        contains(github.event.pull_request.labels.*.name, 'automerge')
       )
-    
+
     permissions:
       contents: write
       pull-requests: write
-      checks: read
-    
+
     steps:
-    - name: 🔍 Wait for all checks to pass
-      uses: lewagon/wait-on-check-action@v1.3.4
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        wait-interval: 10
-        running-workflow-name: 'Auto Merge after Tests Pass'
-        allowed-conclusions: success
-    
-    - name: ✅ Auto-approve PR
-      uses: hmarr/auto-approve-action@v4
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: 🚀 Enable auto-merge
-      run: gh pr merge --auto --squash "$PR_NUMBER"
+    - name: 🚀 Enable auto-merge (squash)
       env:
-        PR_NUMBER: ${{ github.event.pull_request.number }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Enabling auto-merge for PR #${{ github.event.pull_request.number }}"
+        gh pr merge --auto --squash ${{ github.event.pull_request.number }} --repo ${{ github.repository }}
