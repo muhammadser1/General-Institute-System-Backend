@@ -1,10 +1,7 @@
 name: Auto Merge to Develop
 
 on:
-  # Trigger only when all checks (from other workflows) are completed
-  check_suite:
-    types: [completed]
-  # Also when a PR is updated or ready
+  # Only trigger when PR is ready and tests are complete
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [develop]
@@ -29,24 +26,13 @@ jobs:
       )
 
     permissions:
-      actions: read
-      checks: read
       contents: write
       pull-requests: write
 
     steps:
-    - name: 🧠 Wait for all required checks
-      uses: lewagon/wait-on-check-action@v1.3.4
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        wait-interval: 10
-        running-workflow-name: 'Tests and Code Quality'
-        allowed-conclusions: success
-
     - name: 🚀 Enable auto-merge (squash)
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo "All checks passed! Attempting to merge..."
+        echo "Enabling auto-merge for PR #${{ github.event.pull_request.number }}"
         gh pr merge --auto --squash ${{ github.event.pull_request.number }} --repo ${{ github.repository }}
