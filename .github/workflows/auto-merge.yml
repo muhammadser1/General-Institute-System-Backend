@@ -27,13 +27,12 @@ jobs:
         startsWith(github.event.pull_request.head.ref, 'bugfix/') ||
         contains(github.event.pull_request.labels.*.name, 'automerge')
       )
-      
-    permissions:
-        actions: read
-        checks: read
-        contents: write
-        pull-requests: write
 
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      pull-requests: write
 
     steps:
     - name: 🧠 Wait for all required checks
