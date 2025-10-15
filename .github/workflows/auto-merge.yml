@@ -27,7 +27,7 @@ jobs:
         startsWith(github.event.pull_request.head.ref, 'bugfix/') ||
         contains(github.event.pull_request.labels.*.name, 'automerge')
       )
-
+      
     permissions:
         actions: read
         checks: read
@@ -37,13 +37,13 @@ jobs:
 
     steps:
     - name: 🧠 Wait for all required checks
-      uses: fountainhead/action-wait-for-check@v1.0.0
+      uses: lewagon/wait-on-check-action@v1.3.4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        checkName: Tests and Code Quality
         ref: ${{ github.event.pull_request.head.sha }}
-        intervalSeconds: 15
-        timeoutSeconds: 600
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        wait-interval: 10
+        running-workflow-name: 'Tests and Code Quality'
+        allowed-conclusions: success
 
     - name: 🚀 Enable auto-merge (squash)
       env:
