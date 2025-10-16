@@ -1,38 +1,25 @@
 """
 Subject pricing configuration for teacher payments.
-Admins can easily update prices here.
-Supports different prices for individual and group lessons.
+NOW USES DATABASE INSTEAD OF HARDCODED VALUES!
+
+Admins manage pricing through API endpoints.
+This module provides helper functions to fetch pricing from database.
 """
 
-# Subject pricing in your currency (e.g., USD, EUR, etc.)
-# Format: {"subject": {"individual": price, "group": price}}
-# Easy to modify - just update the prices below
-SUBJECT_PRICES = {
-    "math": {"individual": 50.0, "group": 30.0},
-    "arabic": {"individual": 60.0, "group": 35.0},
-    "english": {"individual": 55.0, "group": 32.0},
-    "science": {"individual": 50.0, "group": 30.0},
-    "physics": {"individual": 55.0, "group": 33.0},
-    "chemistry": {"individual": 55.0, "group": 33.0},
-    "biology": {"individual": 50.0, "group": 30.0},
-    "history": {"individual": 45.0, "group": 28.0},
-    "geography": {"individual": 45.0, "group": 28.0},
-    "computer_science": {"individual": 60.0, "group": 35.0},
-    "programming": {"individual": 65.0, "group": 40.0},
-    "music": {"individual": 40.0, "group": 25.0},
-    "art": {"individual": 40.0, "group": 25.0},
-    "sports": {"individual": 35.0, "group": 22.0},
-    "other": {"individual": 45.0, "group": 28.0},
-}
+from typing import Optional
+from app.db import mongo_db
+from app.models.pricing import Pricing
 
+
+# Default prices (fallback if subject not found in database)
 DEFAULT_INDIVIDUAL_PRICE = 45.0
 DEFAULT_GROUP_PRICE = 28.0
+DEFAULT_CURRENCY = "USD"
 
 
 def get_subject_price(subject: str, lesson_type: str = "individual") -> float:
     """
-    Get the price per hour for a specific subject and lesson type.
-    Case-insensitive lookup.
+    Get the price per hour for a specific subject and lesson type from DATABASE.
     
     Args:
         subject: Subject name (e.g., "Math", "Arabic")
@@ -41,21 +28,14 @@ def get_subject_price(subject: str, lesson_type: str = "individual") -> float:
     Returns:
         Price per hour for the subject and lesson type
     """
-    subject_lower = subject.lower().strip()
-    lesson_type_lower = lesson_type.lower().strip()
+    # Fetch from database
+    pricing = Pricing.find_by_subject(subject, mongo_db.pricing_collection)
     
-    # Get subject pricing
-    subject_pricing = SUBJECT_PRICES.get(subject_lower)
+    if pricing:
+        return pricing.get_price(lesson_type)
     
-    if not subject_pricing:
-        # Subject not found, use defaults
-        return DEFAULT_INDIVIDUAL_PRICE if lesson_type_lower == "individual" else DEFAULT_GROUP_PRICE
-    
-    # Get price for lesson type
-    if lesson_type_lower == "group":
-        return subject_pricing.get("group", DEFAULT_GROUP_PRICE)
-    else:
-        return subject_pricing.get("individual", DEFAULT_INDIVIDUAL_PRICE)
+    # Fallback to defaults if not found
+    return DEFAULT_INDIVIDUAL_PRICE if lesson_type.lower() == "individual" else DEFAULT_GROUP_PRICE
 
 
 def calculate_subject_earnings(hours: float, subject: str, lesson_type: str = "individual") -> float:
@@ -76,10 +56,40 @@ def calculate_subject_earnings(hours: float, subject: str, lesson_type: str = "i
 
 def get_all_subject_prices() -> dict:
     """
-    Get all subject prices for admin reference.
+    Get all subject prices from DATABASE for admin reference.
     
     Returns:
         Dictionary of all subject prices (with individual and group rates)
     """
-    return SUBJECT_PRICES.copy()
+    pricing_list = Pricing.get_all_active(mongo_db.pricing_collection)
+    
+    result = {}
+    for pricing in pricing_list:
+        result[pricing.subject.lower()] = {
+            "individual": pricing.individual_price,
+            "group": pricing.group_price,
+            "currency": pricing.currency
+        }
+    
+    return result
 
+
+def get_price_with_currency(subject: str, lesson_type: str = "individual") -> tuple[float, str]:
+    """
+    Get price and currency for a subject and lesson type.
+    
+    Args:
+        subject: Subject name
+        lesson_type: "individual" or "group"
+    
+    Returns:
+        Tuple of (price, currency)
+    """
+    pricing = Pricing.find_by_subject(subject, mongo_db.pricing_collection)
+    
+    if pricing:
+        return (pricing.get_price(lesson_type), pricing.currency)
+    
+    # Fallback
+    price = DEFAULT_INDIVIDUAL_PRICE if lesson_type.lower() == "individual" else DEFAULT_GROUP_PRICE
+    return (price, DEFAULT_CURRENCY)

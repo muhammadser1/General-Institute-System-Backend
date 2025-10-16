@@ -7,7 +7,7 @@ FastAPI backend for managing institute operations: teachers, lessons, and studen
 ```bash
 # 1. Create & activate virtual environment
 python -m venv venv
-.\venv\Scripts\activate
+    .\venv\Scripts\activate
 
 # 2. Install dependencies
 pip install -r requirements.txt

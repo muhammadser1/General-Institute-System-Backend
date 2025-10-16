@@ -23,12 +23,14 @@ def mock_db():
     users_collection = db["users"]
     lessons_collection = db["lessons"]
     payments_collection = db["payments"]
+    pricing_collection = db["pricing"]
     
     yield {
         "db": db,
         "users": users_collection,
         "lessons": lessons_collection,
-        "payments": payments_collection
+        "payments": payments_collection,
+        "pricing": pricing_collection
     }
     
     # Cleanup

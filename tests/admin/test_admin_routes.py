@@ -982,8 +982,10 @@ class TestAdminSubjectPrices:
             "role": admin.role.value
         })
         
-        with patch('app.api.deps.mongo_db') as mock_deps:
+        with patch('app.api.deps.mongo_db') as mock_deps, \
+             patch('app.core.pricing.mongo_db') as mock_pricing_db:
             mock_deps.users_collection = mock_db["users"]
+            mock_pricing_db.pricing_collection = mock_db["pricing"]
             
             response = client.get(
                 "/api/v1/admin/subject-prices",
@@ -1075,10 +1077,12 @@ class TestAdminTeacherEarnings:
         })
         
         with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
-             patch('app.api.deps.mongo_db') as mock_deps:
+             patch('app.api.deps.mongo_db') as mock_deps, \
+             patch('app.core.pricing.mongo_db') as mock_pricing_db:
             mock_mongo.users_collection = mock_db["users"]
             mock_mongo.lessons_collection = mock_db["lessons"]
             mock_deps.users_collection = mock_db["users"]
+            mock_pricing_db.pricing_collection = mock_db["pricing"]
             
             response = client.get(
                 f"/api/v1/admin/teacher-earnings/{teacher._id}",
@@ -1141,10 +1145,12 @@ class TestAdminTeacherEarnings:
         })
         
         with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
-             patch('app.api.deps.mongo_db') as mock_deps:
+             patch('app.api.deps.mongo_db') as mock_deps, \
+             patch('app.core.pricing.mongo_db') as mock_pricing_db:
             mock_mongo.users_collection = mock_db["users"]
             mock_mongo.lessons_collection = mock_db["lessons"]
             mock_deps.users_collection = mock_db["users"]
+            mock_pricing_db.pricing_collection = mock_db["pricing"]
             
             # Filter by January
             response = client.get(
@@ -1274,10 +1280,12 @@ class TestAdminTeacherEarnings:
         })
         
         with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
-             patch('app.api.deps.mongo_db') as mock_deps:
+             patch('app.api.deps.mongo_db') as mock_deps, \
+             patch('app.core.pricing.mongo_db') as mock_pricing_db:
             mock_mongo.users_collection = mock_db["users"]
             mock_mongo.lessons_collection = mock_db["lessons"]
             mock_deps.users_collection = mock_db["users"]
+            mock_pricing_db.pricing_collection = mock_db["pricing"]
             
             response = client.get(
                 f"/api/v1/admin/teacher-earnings/{teacher._id}",

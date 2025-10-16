@@ -1021,3 +1021,342 @@ class TestLessonIntegration:
             assert complete_response.status_code == 200
             assert complete_response.json()["status"] == "completed"
 
+
+class TestLessonsSummaryEndpoint:
+    """Test GET /api/v1/lessons/summary - Get lessons summary by subject and type"""
+    
+    def test_summary_with_no_lessons(self, client, mock_db):
+        """Test summary endpoint returns empty data when teacher has no lessons"""
+        teacher = User(
+            username="teacher",
+            hashed_password=get_password_hash("teacher123"),
+            role=UserRole.TEACHER,
+            status=UserStatus.ACTIVE,
+            first_name="John",
+            last_name="Doe"
+        )
+        mock_db["users"].insert_one(teacher.to_dict())
+        
+        token = create_access_token({
+            "sub": teacher._id,
+            "role": teacher.role.value
+        })
+        
+        with patch('app.api.v1.endpoints.lessons.mongo_db') as mock_mongo, \
+             patch('app.api.deps.mongo_db') as mock_deps:
+            mock_mongo.lessons_collection = mock_db["lessons"]
+            mock_deps.users_collection = mock_db["users"]
+            
+            response = client.get(
+                "/api/v1/lessons/summary",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Should return empty summary
+            assert data["overall"]["total_lessons"] == 0
+            assert data["overall"]["total_hours"] == 0.0
+            assert data["by_subject"] == {}
+    
+    def test_summary_with_multiple_subjects_and_types(self, client, mock_db):
+        """Test summary correctly groups lessons by subject and type"""
+        teacher = User(
+            username="teacher",
+            hashed_password=get_password_hash("teacher123"),
+            role=UserRole.TEACHER,
+            status=UserStatus.ACTIVE,
+            first_name="John",
+            last_name="Doe"
+        )
+        mock_db["users"].insert_one(teacher.to_dict())
+        
+        # Create lessons with different subjects and types
+        lessons = [
+            # Mathematics - 2 individual (60 + 90 = 150 min = 2.5 hours)
+            Lesson(
+                teacher_id=teacher._id,
+                teacher_name="John Doe",
+                title="Math 1",
+                subject="Mathematics",
+                lesson_type=LessonType.INDIVIDUAL,
+                scheduled_date=datetime(2024, 1, 10),
+                duration_minutes=60,
+                max_students=1,
+                students=[{"student_name": "Student 1"}],
+                status=LessonStatus.PENDING
+            ),
+            Lesson(
+                teacher_id=teacher._id,
+                teacher_name="John Doe",
+                title="Math 2",
+                subject="Mathematics",
+                lesson_type=LessonType.INDIVIDUAL,
+                scheduled_date=datetime(2024, 1, 11),
+                duration_minutes=90,
+                max_students=1,
+                students=[{"student_name": "Student 2"}],
+                status=LessonStatus.COMPLETED
+            ),
+            # Mathematics - 1 group (120 min = 2 hours)
+            Lesson(
+                teacher_id=teacher._id,
+                teacher_name="John Doe",
+                title="Math Group",
+                subject="Mathematics",
+                lesson_type=LessonType.GROUP,
+                scheduled_date=datetime(2024, 1, 12),
+                duration_minutes=120,
+                max_students=5,
+                students=[
+                    {"student_name": "Student 3"},
+                    {"student_name": "Student 4"},
+                    {"student_name": "Student 5"}
+                ],
+                status=LessonStatus.PENDING
+            ),
+            # Physics - 1 individual (60 min = 1 hour)
+            Lesson(
+                teacher_id=teacher._id,
+                teacher_name="John Doe",
+                title="Physics 1",
+                subject="Physics",
+                lesson_type=LessonType.INDIVIDUAL,
+                scheduled_date=datetime(2024, 1, 13),
+                duration_minutes=60,
+                max_students=1,
+                students=[{"student_name": "Student 6"}],
+                status=LessonStatus.PENDING
+            ),
+            # Physics - 1 group (90 min = 1.5 hours)
+            Lesson(
+                teacher_id=teacher._id,
+                teacher_name="John Doe",
+                title="Physics Group",
+                subject="Physics",
+                lesson_type=LessonType.GROUP,
+                scheduled_date=datetime(2024, 1, 14),
+                duration_minutes=90,
+                max_students=4,
+                students=[
+                    {"student_name": "Student 7"},
+                    {"student_name": "Student 8"}
+                ],
+                status=LessonStatus.CANCELLED
+            ),
+        ]
+        
+        for lesson in lessons:
+            mock_db["lessons"].insert_one(lesson.to_dict())
+        
+        token = create_access_token({
+            "sub": teacher._id,
+            "role": teacher.role.value
+        })
+        
+        with patch('app.api.v1.endpoints.lessons.mongo_db') as mock_mongo, \
+             patch('app.api.deps.mongo_db') as mock_deps:
+            mock_mongo.lessons_collection = mock_db["lessons"]
+            mock_deps.users_collection = mock_db["users"]
+            
+            response = client.get(
+                "/api/v1/lessons/summary",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Check overall stats
+            assert data["overall"]["total_lessons"] == 5
+            assert data["overall"]["total_hours"] == 7.0  # 2.5 + 2.0 + 1.0 + 1.5
+            assert data["overall"]["individual_lessons"] == 3
+            assert data["overall"]["individual_hours"] == 3.5  # 60 + 90 + 60 = 210 min = 3.5 hours
+            assert data["overall"]["group_lessons"] == 2
+            assert data["overall"]["group_hours"] == 3.5  # 120 + 90 = 210 min = 3.5 hours
+            
+            # Check Mathematics
+            math = data["by_subject"]["Mathematics"]
+            assert math["total_lessons"] == 3
+            assert math["total_hours"] == 4.5  # 2.5 + 2.0
+            assert math["individual"]["lessons"] == 2
+            assert math["individual"]["hours"] == 2.5
+            assert math["individual"]["students"] == 2
+            assert math["individual"]["pending"] == 1
+            assert math["individual"]["completed"] == 1
+            assert math["individual"]["cancelled"] == 0
+            assert math["group"]["lessons"] == 1
+            assert math["group"]["hours"] == 2.0
+            assert math["group"]["students"] == 3
+            assert math["group"]["pending"] == 1
+            
+            # Check Physics
+            physics = data["by_subject"]["Physics"]
+            assert physics["total_lessons"] == 2
+            assert physics["total_hours"] == 2.5  # 1.0 + 1.5
+            assert physics["individual"]["lessons"] == 1
+            assert physics["individual"]["hours"] == 1.0
+            assert physics["group"]["lessons"] == 1
+            assert physics["group"]["hours"] == 1.5
+            assert physics["group"]["cancelled"] == 1
+    
+    def test_summary_only_shows_teacher_own_lessons(self, client, mock_db):
+        """Test summary only includes lessons belonging to the authenticated teacher"""
+        teacher1 = User(
+            username="teacher1",
+            hashed_password=get_password_hash("teacher123"),
+            role=UserRole.TEACHER,
+            status=UserStatus.ACTIVE,
+            first_name="John",
+            last_name="Doe"
+        )
+        teacher2 = User(
+            username="teacher2",
+            hashed_password=get_password_hash("teacher123"),
+            role=UserRole.TEACHER,
+            status=UserStatus.ACTIVE,
+            first_name="Jane",
+            last_name="Smith"
+        )
+        mock_db["users"].insert_one(teacher1.to_dict())
+        mock_db["users"].insert_one(teacher2.to_dict())
+        
+        # Create lessons for teacher1
+        lesson1 = Lesson(
+            teacher_id=teacher1._id,
+            teacher_name="John Doe",
+            title="Math 1",
+            subject="Mathematics",
+            lesson_type=LessonType.INDIVIDUAL,
+            scheduled_date=datetime(2024, 1, 10),
+            duration_minutes=60,
+            max_students=1,
+            students=[{"student_name": "Student 1"}],
+            status=LessonStatus.PENDING
+        )
+        mock_db["lessons"].insert_one(lesson1.to_dict())
+        
+        # Create lessons for teacher2
+        lesson2 = Lesson(
+            teacher_id=teacher2._id,
+            teacher_name="Jane Smith",
+            title="Physics 1",
+            subject="Physics",
+            lesson_type=LessonType.GROUP,
+            scheduled_date=datetime(2024, 1, 11),
+            duration_minutes=90,
+            max_students=5,
+            students=[{"student_name": "Student 2"}, {"student_name": "Student 3"}],
+            status=LessonStatus.PENDING
+        )
+        mock_db["lessons"].insert_one(lesson2.to_dict())
+        
+        # Login as teacher1
+        token = create_access_token({
+            "sub": teacher1._id,
+            "role": teacher1.role.value
+        })
+        
+        with patch('app.api.v1.endpoints.lessons.mongo_db') as mock_mongo, \
+             patch('app.api.deps.mongo_db') as mock_deps:
+            mock_mongo.lessons_collection = mock_db["lessons"]
+            mock_deps.users_collection = mock_db["users"]
+            
+            response = client.get(
+                "/api/v1/lessons/summary",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Should only see teacher1's lessons
+            assert data["overall"]["total_lessons"] == 1
+            assert "Mathematics" in data["by_subject"]
+            assert "Physics" not in data["by_subject"]
+    
+    def test_summary_requires_authentication(self, client, mock_db):
+        """Test summary endpoint requires valid authentication"""
+        response = client.get("/api/v1/lessons/summary")
+        
+        # Should return 403 Forbidden (FastAPI default for missing auth)
+        assert response.status_code == 403
+    
+    def test_summary_aggregates_same_subject_different_types(self, client, mock_db):
+        """Test that lessons with same subject but different types are properly separated"""
+        teacher = User(
+            username="teacher",
+            hashed_password=get_password_hash("teacher123"),
+            role=UserRole.TEACHER,
+            status=UserStatus.ACTIVE,
+            first_name="John",
+            last_name="Doe"
+        )
+        mock_db["users"].insert_one(teacher.to_dict())
+        
+        # Create multiple individual and group lessons for same subject
+        for i in range(3):
+            # Individual
+            individual = Lesson(
+                teacher_id=teacher._id,
+                teacher_name="John Doe",
+                title=f"Math Individual {i+1}",
+                subject="Mathematics",
+                lesson_type=LessonType.INDIVIDUAL,
+                scheduled_date=datetime(2024, 1, 10+i),
+                duration_minutes=60,
+                max_students=1,
+                students=[{"student_name": f"Student {i+1}"}],
+                status=LessonStatus.PENDING
+            )
+            mock_db["lessons"].insert_one(individual.to_dict())
+            
+            # Group
+            group = Lesson(
+                teacher_id=teacher._id,
+                teacher_name="John Doe",
+                title=f"Math Group {i+1}",
+                subject="Mathematics",
+                lesson_type=LessonType.GROUP,
+                scheduled_date=datetime(2024, 1, 20+i),
+                duration_minutes=120,
+                max_students=5,
+                students=[
+                    {"student_name": f"Student {i+10}"},
+                    {"student_name": f"Student {i+20}"}
+                ],
+                status=LessonStatus.PENDING
+            )
+            mock_db["lessons"].insert_one(group.to_dict())
+        
+        token = create_access_token({
+            "sub": teacher._id,
+            "role": teacher.role.value
+        })
+        
+        with patch('app.api.v1.endpoints.lessons.mongo_db') as mock_mongo, \
+             patch('app.api.deps.mongo_db') as mock_deps:
+            mock_mongo.lessons_collection = mock_db["lessons"]
+            mock_deps.users_collection = mock_db["users"]
+            
+            response = client.get(
+                "/api/v1/lessons/summary",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            math = data["by_subject"]["Mathematics"]
+            
+            # Should have 3 individual and 3 group
+            assert math["individual"]["lessons"] == 3
+            assert math["individual"]["hours"] == 3.0  # 3 * 60 min = 180 min = 3 hours
+            assert math["group"]["lessons"] == 3
+            assert math["group"]["hours"] == 6.0  # 3 * 120 min = 360 min = 6 hours
+            
+            # Total should be sum
+            assert math["total_lessons"] == 6
+            assert math["total_hours"] == 9.0
+
