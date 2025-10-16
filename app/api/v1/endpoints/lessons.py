@@ -155,6 +155,121 @@ def get_my_lessons(
     )
 
 
+@router.get("/summary", response_model=Dict)
+def get_lessons_summary(
+    current_user: Dict = Depends(get_current_teacher)
+):
+    """
+    Get detailed summary of lessons grouped by subject and type
+    Returns breakdown like:
+    - Mathematics individual: X lessons, Y hours
+    - Mathematics group: X lessons, Y hours
+    - Physics individual: X lessons, Y hours
+    - etc.
+    """
+    teacher_id = str(current_user["_id"])
+    
+    # MongoDB aggregation pipeline
+    pipeline = [
+        # Match teacher's lessons
+        {"$match": {"teacher_id": teacher_id}},
+        
+        # Group by subject and type
+        {"$group": {
+            "_id": {
+                "subject": "$subject",
+                "lesson_type": "$lesson_type"
+            },
+            "total_lessons": {"$sum": 1},
+            "total_minutes": {"$sum": "$duration_minutes"},
+            "total_students": {"$sum": {"$size": "$students"}},
+            "pending_count": {
+                "$sum": {"$cond": [{"$eq": ["$status", "pending"]}, 1, 0]}
+            },
+            "completed_count": {
+                "$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}
+            },
+            "cancelled_count": {
+                "$sum": {"$cond": [{"$eq": ["$status", "cancelled"]}, 1, 0]}
+            }
+        }},
+        
+        # Sort by subject and type
+        {"$sort": {"_id.subject": 1, "_id.lesson_type": 1}}
+    ]
+    
+    results = list(mongo_db.lessons_collection.aggregate(pipeline))
+    
+    # Format results
+    summary_by_subject = {}
+    overall_stats = {
+        "total_lessons": 0,
+        "total_hours": 0.0,
+        "individual_lessons": 0,
+        "individual_hours": 0.0,
+        "group_lessons": 0,
+        "group_hours": 0.0
+    }
+    
+    for result in results:
+        subject = result["_id"]["subject"]
+        lesson_type = result["_id"]["lesson_type"]
+        total_lessons = result["total_lessons"]
+        total_hours = result["total_minutes"] / 60.0
+        
+        # Initialize subject if not exists
+        if subject not in summary_by_subject:
+            summary_by_subject[subject] = {
+                "total_lessons": 0,
+                "total_hours": 0.0,
+                "individual": {
+                    "lessons": 0,
+                    "hours": 0.0,
+                    "students": 0,
+                    "pending": 0,
+                    "completed": 0,
+                    "cancelled": 0
+                },
+                "group": {
+                    "lessons": 0,
+                    "hours": 0.0,
+                    "students": 0,
+                    "pending": 0,
+                    "completed": 0,
+                    "cancelled": 0
+                }
+            }
+        
+        # Update subject totals
+        summary_by_subject[subject]["total_lessons"] += total_lessons
+        summary_by_subject[subject]["total_hours"] += total_hours
+        
+        # Update type-specific stats
+        type_key = "individual" if lesson_type == "individual" else "group"
+        summary_by_subject[subject][type_key]["lessons"] = total_lessons
+        summary_by_subject[subject][type_key]["hours"] = total_hours
+        summary_by_subject[subject][type_key]["students"] = result["total_students"]
+        summary_by_subject[subject][type_key]["pending"] = result["pending_count"]
+        summary_by_subject[subject][type_key]["completed"] = result["completed_count"]
+        summary_by_subject[subject][type_key]["cancelled"] = result["cancelled_count"]
+        
+        # Update overall stats
+        overall_stats["total_lessons"] += total_lessons
+        overall_stats["total_hours"] += total_hours
+        
+        if lesson_type == "individual":
+            overall_stats["individual_lessons"] += total_lessons
+            overall_stats["individual_hours"] += total_hours
+        else:
+            overall_stats["group_lessons"] += total_lessons
+            overall_stats["group_hours"] += total_hours
+    
+    return {
+        "overall": overall_stats,
+        "by_subject": summary_by_subject
+    }
+
+
 @router.put("/update-lesson/{lesson_id}", response_model=LessonResponse)
 def update_lesson(
     lesson_id: str,

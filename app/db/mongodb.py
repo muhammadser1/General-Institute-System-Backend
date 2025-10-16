@@ -18,6 +18,7 @@ class MongoDatabase:
         self.users_collection = None
         self.lessons_collection = None
         self.payments_collection = None
+        self.pricing_collection = None
 
     def check_mongo_connection(self):
         """
@@ -51,9 +52,10 @@ class MongoDatabase:
             self.users_collection = self.db["users"]
             self.lessons_collection = self.db["lessons"]
             self.payments_collection = self.db["payments"]
+            self.pricing_collection = self.db["pricing"]
             
             logger.info(f"✅ Connected to database: {config.MONGO_DATABASE}")
-            logger.info(f"📚 Collections initialized: users, lessons, payments")
+            logger.info(f"📚 Collections initialized: users, lessons, payments, pricing")
             
             # Create indexes
             self.create_indexes()
@@ -88,6 +90,10 @@ class MongoDatabase:
             self.payments_collection.create_index("student_name")
             self.payments_collection.create_index("payment_date")
             self.payments_collection.create_index("lesson_id")
+            
+            # Pricing collection indexes
+            self.pricing_collection.create_index("subject", unique=True)
+            self.pricing_collection.create_index("is_active")
             
             logger.info("✅ Indexes created successfully")
             
