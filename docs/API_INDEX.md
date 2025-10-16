@@ -75,11 +75,11 @@ Subject pricing management and lookup.
 - `PUT /api/v1/pricing/{id}` - Update pricing
 - `DELETE /api/v1/pricing/{id}` - Deactivate pricing
 
-**User Endpoints:**
+<!-- **User Endpoints:**
 - `GET /api/v1/pricing/lookup/{subject}` - Lookup subject price (Authenticated)
 
 **Public Endpoints:**
-- `GET /api/v1/pricing/public/all` - Get all public pricing (No auth)
+- `GET /api/v1/pricing/public/all` - Get all public pricing (No auth) -->
 
 ---
 
