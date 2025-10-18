@@ -1,52 +1,72 @@
 name: Auto Merge to Develop
 
 on:
-  # Trigger when PR checks complete
-  pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [ develop ]  # Only auto-merge to develop
-  check_suite:
+  # Trigger ONLY when the test workflow completes successfully
+  workflow_run:
+    workflows: ["Tests and Code Quality"]
     types: [completed]
+    branches: [develop]
 
 jobs:
   auto-merge:
     name: Auto Merge to Develop Branch
     runs-on: ubuntu-latest
     
-    # Only auto-merge PRs targeting develop branch
-    # NEVER auto-merge to main (main is manual only)
+    # Only run if the test workflow succeeded
     if: |
-      github.event.pull_request.base.ref == 'develop' &&
-      github.event.pull_request.draft == false &&
-      (
-        contains(github.event.pull_request.labels.*.name, 'automerge') ||
-        startsWith(github.event.pull_request.head.ref, 'dependabot/') ||
-        startsWith(github.event.pull_request.head.ref, 'feature/') ||
-        startsWith(github.event.pull_request.head.ref, 'bugfix/')
-      )
-    
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+
     permissions:
       contents: write
       pull-requests: write
-      checks: read
-    
+
     steps:
-    - name: 🔍 Wait for all checks to pass
-      uses: lewagon/wait-on-check-action@v1.3.4
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        wait-interval: 10
-        running-workflow-name: 'Auto Merge after Tests Pass'
-        allowed-conclusions: success
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
     
-    - name: ✅ Auto-approve PR
-      uses: hmarr/auto-approve-action@v4
+    - name: 🔍 Get PR number
+      id: pr
+      uses: actions/github-script@v7
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const pulls = await github.rest.pulls.list({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            head: `${context.repo.owner}:${context.payload.workflow_run.head_branch}`,
+            state: 'open'
+          });
+          
+          if (pulls.data.length === 0) {
+            console.log('No open PR found for this branch');
+            return null;
+          }
+          
+          const pr = pulls.data[0];
+          console.log(`Found PR #${pr.number}: ${pr.title}`);
+          
+          // Check if PR targets develop and matches our criteria
+          if (pr.base.ref !== 'develop') {
+            console.log('PR does not target develop branch');
+            return null;
+          }
+          
+          const headRef = context.payload.workflow_run.head_branch;
+          if (!headRef.startsWith('feature/') && 
+              !headRef.startsWith('bugfix/') && 
+              !pr.labels.some(l => l.name === 'automerge')) {
+            console.log('PR does not match auto-merge criteria');
+            return null;
+          }
+          
+          return pr.number;
     
-    - name: 🚀 Enable auto-merge
-      run: gh pr merge --auto --squash "$PR_NUMBER"
+    - name: 🚀 Enable auto-merge (squash)
+      if: steps.pr.outputs.result != 'null'
       env:
-        PR_NUMBER: ${{ github.event.pull_request.number }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        PR_NUMBER="${{ steps.pr.outputs.result }}"
+        echo "✅ Tests passed! Enabling auto-merge for PR #$PR_NUMBER"
+        gh pr merge --auto --squash "$PR_NUMBER" --repo ${{ github.repository }}
+        echo "🎉 Auto-merge enabled! PR will merge automatically."

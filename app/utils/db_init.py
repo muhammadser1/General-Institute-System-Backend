@@ -34,12 +34,14 @@ def create_admin_user():
             return admin
         
         # Create admin user
+        import uuid
         admin_password = "mhmdd400"
         hashed_password = get_password_hash(admin_password)
         
         admin_user = {
-            "username": "admin",
-            "password": hashed_password,
+            "_id": str(uuid.uuid4()),
+            "username": "mhmdd400",  # Fixed: was "admin", should be "mhmdd400"
+            "hashed_password": hashed_password,  # Fixed: was "password", should be "hashed_password"
             "role": "admin",
             "status": "active",
             "email": "admin@institute.com",
@@ -53,9 +55,10 @@ def create_admin_user():
         
         users_collection.insert_one(admin_user)
         logger.info("✅ Created admin user successfully")
-        logger.info(f"   Username: admin")
+        logger.info(f"   Username: mhmdd400")
         logger.info(f"   Password: {admin_password}")
         logger.info("   ⚠️  IMPORTANT: Change the admin password after first login!")
+        
         
         return admin_user
         
@@ -79,12 +82,14 @@ def create_sample_teacher():
             return teacher
         
         # Create teacher user
+        import uuid
         teacher_password = "teacher123"
         hashed_password = get_password_hash(teacher_password)
         
         teacher_user = {
+            "_id": str(uuid.uuid4()),
             "username": "teacher1",
-            "password": hashed_password,
+            "hashed_password": hashed_password,  # Fixed: was "password", should be "hashed_password"
             "role": "teacher",
             "status": "active",
             "email": "teacher1@institute.com",
