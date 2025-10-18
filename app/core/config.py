@@ -26,9 +26,8 @@ class Config:
     # Email Settings
     EMAIL_USER = os.getenv("EMAIL_USER")
     EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-    EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@institute.com")
-    EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-    EMAIL_SERVER = os.getenv("EMAIL_SERVER", "smtp.gmail.com")
+    EMAIL_TO = os.getenv("EMAIL_TO")  # Default recipient for notifications
+    EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@institute.com")  # Sender display name
     
     # CORS Settings
     ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
