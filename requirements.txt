@@ -22,6 +22,7 @@ aiofiles==24.1.0
 # Background Tasks
 redis==5.2.0
 celery==5.4.0
+apscheduler==3.10.4
 
 # Testing
 pytest==8.3.3

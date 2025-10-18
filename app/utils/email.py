@@ -14,15 +14,17 @@ from app.core.config import config
 def send_email(
     subject: str,
     body: str,
-    to_email: str
+    to_email: str,
+    attachments: Optional[list[tuple[str, str]]] = None
 ) -> bool:
     """
-    Send email
+    Send email with optional attachments
     
     Args:
         subject: Email subject
         body: Email body text
         to_email: Recipient email
+        attachments: List of (filename, content) tuples
         
     Returns:
         True if sent successfully, False otherwise
@@ -39,6 +41,18 @@ def send_email(
     msg["To"] = to_email
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
+    
+    # Add attachments if provided
+    if attachments:
+        from email.mime.base import MIMEBase
+        from email import encoders
+        
+        for filename, content in attachments:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(content.encode("utf-8"))
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", f"attachment; filename={filename}")
+            msg.attach(part)
     
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
