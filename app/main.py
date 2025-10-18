@@ -4,11 +4,14 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 import traceback
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from app.core.config import config
 from app.db import connect_to_mongo, close_mongo_connection
 from app.api.v1.api import api_router
 from app.utils.email import send_crash_notification
+from app.utils.weekly_report import send_weekly_report_job
 
 # Configure logging
 logging.basicConfig(
@@ -28,6 +31,22 @@ async def lifespan(app: FastAPI):
     try:
         connect_to_mongo()
         logger.info("✅ Application startup complete")
+        
+        # Start scheduler for weekly reports
+        scheduler = BackgroundScheduler()
+        
+        # Schedule weekly report every Saturday at 9:00 AM
+        scheduler.add_job(
+            send_weekly_report_job,
+            trigger=CronTrigger(day_of_week='sat', hour=9, minute=0),
+            id='weekly_lesson_report',
+            name='Weekly Lesson Report',
+            replace_existing=True
+        )
+        
+        scheduler.start()
+        logger.info("📅 Weekly lesson report scheduler started (Every Saturday at 9:00 AM)")
+        
     except Exception as e:
         logger.error(f"❌ Failed to start application: {str(e)}")
         raise
@@ -37,6 +56,14 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("🛑 Shutting down General Institute System API...")
     close_mongo_connection()
+    
+    # Shutdown scheduler
+    try:
+        scheduler.shutdown()
+        logger.info("📅 Scheduler stopped")
+    except:
+        pass
+    
     logger.info("✅ Application shutdown complete")
 
 

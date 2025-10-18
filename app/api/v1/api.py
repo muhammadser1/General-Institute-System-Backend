@@ -19,6 +19,10 @@ api_router.include_router(payments.router, prefix="/payments", tags=["Payments"]
 # Pricing routes (admin management + public lookup)
 api_router.include_router(pricing.router, prefix="/pricing", tags=["Pricing"])
 
+# Admin routes - Weekly Reports
+from app.api.v1.endpoints import weekly_report
+api_router.include_router(weekly_report.router, prefix="/weekly-report", tags=["Weekly Reports"])
+
 # Test routes (only in development)
 if config.DEBUG or config.ENVIRONMENT == "development":
     from app.api.v1.endpoints import email_test, test_crash
