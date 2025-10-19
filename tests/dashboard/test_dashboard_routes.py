@@ -26,6 +26,7 @@ class TestDashboardStats:
             "sub": admin._id,
             "username": admin.username,
             "role": admin.role.value
+
         })
         
         with patch('app.api.v1.endpoints.dashboard.mongo_db') as mock_mongo, \

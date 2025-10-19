@@ -514,22 +514,35 @@ Authorization: Bearer <your-token>
 }
 ```
 
-### Get Monthly Payments (Admin Only)
+### Get Payments (Flexible Filtering - Admin Only)
 
-**Endpoint:** `GET /payments/?month=1&year=2025`
+**Endpoint:** `GET /payments/`
 
 **Headers:** `Authorization: Bearer <admin-token>`
 
 **Query Parameters:**
-- `month` (required): 1-12
-- `year` (required): 2000-2100
-- `student_name` (optional): Filter by student
+- `month` (optional): 1-12 - **requires year to be provided**
+- `year` (optional): 2000-2100 - **required if month is provided**
+- `student_name` (optional): Filter by student name (partial match, case-insensitive)
+
+**Filtering Behavior:**
+
+1. **No filters:** Show all payments
+   - `GET /payments/`
+
+2. **Filter by month:** Show payments from that month (requires both month AND year)
+   - ✅ `GET /payments/?month=10&year=2025`
+   - ❌ `GET /payments/?month=10` (missing year - will return 400 error)
+
+3. **Filter by student name only:** Show all payments for that student (all months)
+   - `GET /payments/?student_name=Ahmad`
+
+4. **Filter by both month + student name:** Show payments for that student in that month
+   - `GET /payments/?month=10&year=2025&student_name=Ahmad`
 
 **Response (200 OK):**
 ```json
 {
-  "month": 1,
-  "year": 2025,
   "total_payments": 10,
   "total_amount": 500.0,
   "payments": [
@@ -537,10 +550,16 @@ Authorization: Bearer <your-token>
       "id": "payment-id-123",
       "student_name": "محمد أحمد علي",
       "amount": 50.0,
-      "payment_date": "2025-01-15T10:00:00",
+      "payment_date": "2025-10-15T10:00:00",
       "notes": "Payment for Math"
     }
-  ]
+  ],
+  "filter": {
+    "month": 10,
+    "year": 2025,
+    "student_name": "Ahmad",
+    "note": "Filtered by student name and month"
+  }
 }
 ```
 
@@ -996,12 +1015,17 @@ GET /dashboard/stats/lessons?month=12&year=2025
 
 4. **Email Notifications:** Crash notifications are automatically sent to `EMAIL_TO` when errors occur.
 
-5. **Month Filtering:** Dashboard and lessons stats support optional month/year filtering:
-   - `month`: 1-12
-   - `year`: 2000-2100
-   - When provided, lessons are filtered by `scheduled_date`
-   - Payments are filtered by `payment_date`
-   - Users and students always show total counts
+5. **Flexible Filtering:** 
+   - **Payments:** Support flexible filtering by month/year and/or student name
+     - No filters: Show all payments
+     - Month filtering: Requires both `month` AND `year` parameters (month alone returns 400 error)
+     - Student name only: Show all payments for that student (all months)
+     - Both: Show payments for that student in that month
+   - **Dashboard & Lessons:** Support optional month/year filtering:
+     - `month`: 1-12
+     - `year`: 2000-2100
+     - When provided, lessons are filtered by `scheduled_date`
+     - Users and students always show total counts
 
 6. **Development Mode:** Test endpoints are only available when `DEBUG=True` or `ENVIRONMENT=development`.
 

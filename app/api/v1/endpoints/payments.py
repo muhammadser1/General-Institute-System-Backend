@@ -45,27 +45,61 @@ def create_payment(
     )
 
 
-@router.get("/", response_model=MonthlyPaymentsResponse)
-def get_monthly_payments(
+@router.get("/")
+def get_payments(
     current_admin: Dict = Depends(get_current_admin),
-    month: int = Query(..., ge=1, le=12, description="Month (1-12)"),
-    year: int = Query(..., ge=2000, le=2100, description="Year"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month (1-12)"),
+    year: Optional[int] = Query(None, ge=2000, le=2100, description="Filter by year"),
     student_name: Optional[str] = Query(None, description="Filter by student name"),
 ):
     """
-    Admin gets all student payments for a specific month
-    - Required: month and year
-    - Optional: filter by student name
-    - Returns: payments + total amount
+    Admin gets student payments with flexible filtering
+    
+    Default behavior:
+    - No filters: Show all payments
+    
+    Filter by month:
+    - If month provided, year is required: Show only payments from that month
+    
+    Filter by student name:
+    - If student_name provided: Show all payments for that student (all months)
+    
+    Both filters:
+    - If month + year + student_name: Show payments for that student in that month
     """
-    # Get payments by month using model method
-    payments = Payment.find_by_month(month, year, mongo_db.payments_collection)
+    # Validate: if month is provided, year must also be provided
+    if month is not None and year is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Year is required when filtering by month. Please provide both month and year."
+        )
+    
+    # Build query based on filters
+    query = {}
+    
+    # Filter by month and year if provided
+    if month and year:
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+        query["payment_date"] = {"$gte": start_date, "$lt": end_date}
     
     # Filter by student name if provided
     if student_name:
-        payments = [p for p in payments if student_name.lower() in p.student_name.lower()]
+        query["student_name"] = {"$regex": student_name, "$options": "i"}
     
-    # Calculate total amount using model method
+    # Get payments from database
+    if query:
+        payment_docs = mongo_db.payments_collection.find(query).sort("payment_date", -1)
+    else:
+        # No filters - get all payments
+        payment_docs = mongo_db.payments_collection.find({}).sort("payment_date", -1)
+    
+    payments = [Payment.from_dict(doc) for doc in payment_docs]
+    
+    # Calculate total amount
     total_amount = Payment.calculate_total(payments)
     
     # Convert to response
@@ -83,13 +117,28 @@ def get_monthly_payments(
         for payment in payments
     ]
     
-    return MonthlyPaymentsResponse(
-        month=month,
-        year=year,
-        total_payments=len(payments),
-        total_amount=total_amount,
-        payments=payment_responses
-    )
+    # Build response
+    response = {
+        "total_payments": len(payments),
+        "total_amount": total_amount,
+        "payments": payment_responses
+    }
+    
+    # Add filter info if filters were applied
+    if month and year:
+        response["filter"] = {
+            "month": month,
+            "year": year,
+            "note": "Filtered by month and year"
+        }
+    
+    if student_name:
+        if "filter" not in response:
+            response["filter"] = {}
+        response["filter"]["student_name"] = student_name
+        response["filter"]["note"] = "Filtered by student name" + (" and month" if month and year else "")
+    
+    return response
 
 
 @router.get("/student/{student_name}")

@@ -42,49 +42,64 @@ Payment tracking and reporting endpoints for administrators.
 
 ---
 
-### 2. Get Monthly Payments
-**GET** `/api/v1/payments/monthly`
+### 2. Get Payments (Flexible Filtering)
+**GET** `/api/v1/payments/`
 
 **Access:** Admin only
 
-**Description:** Get all payments for a specific month with total calculation.
+**Description:** Get payments with flexible filtering options.
 
-**Query Parameters (Required):**
-- `month`: Month number (1-12)
-- `year`: Year (e.g., 2024)
+**Query Parameters:**
+- `month` (optional): Filter by month (1-12) - **requires year to be provided**
+- `year` (optional): Filter by year (e.g., 2025) - **required if month is provided**
+- `student_name` (optional): Filter by student name (partial match, case-insensitive)
 
-**Query Parameters (Optional):**
-- `student_name`: Filter by student name (partial match)
+**Filtering Behavior:**
 
-**Example:** `GET /api/v1/payments/monthly?month=1&year=2024&student_name=Ahmad`
+1. **No filters:** Show all payments
+   - Example: `GET /api/v1/payments/`
+
+2. **Filter by month:** Show payments from that month (requires both month AND year)
+   - Example: `GET /api/v1/payments/?month=10&year=2025`
+   - ❌ Invalid: `GET /api/v1/payments/?month=10` (missing year)
+
+3. **Filter by student name only:** Show all payments for that student (all months)
+   - Example: `GET /api/v1/payments/?student_name=Ahmad`
+
+4. **Filter by both month + student name:** Show payments for that student in that month
+   - Example: `GET /api/v1/payments/?month=10&year=2025&student_name=Ahmad`
 
 **Response (200):**
 ```json
 {
+  "total_payments": 2,
+  "total_amount": 350.00,
   "payments": [
     {
       "id": "payment-uuid-1",
       "student_name": "Ahmad Ali",
       "amount": 250.00,
-      "payment_date": "2024-01-15T10:00:00Z",
+      "payment_date": "2025-10-15T10:00:00Z",
       "lesson_id": "lesson-uuid-1",
-      "notes": "Monthly payment for January",
-      "created_at": "2024-01-15T10:05:00Z"
+      "notes": "Monthly payment for October",
+      "created_at": "2025-10-15T10:05:00Z"
     },
     {
       "id": "payment-uuid-2",
       "student_name": "Ahmad Ali",
       "amount": 100.00,
-      "payment_date": "2024-01-20T14:00:00Z",
+      "payment_date": "2025-10-20T14:00:00Z",
       "lesson_id": "lesson-uuid-2",
       "notes": "Additional lesson payment",
-      "created_at": "2024-01-20T14:05:00Z"
+      "created_at": "2025-10-20T14:05:00Z"
     }
   ],
-  "total": 350.00,
-  "month": 1,
-  "year": 2024,
-  "count": 2
+  "filter": {
+    "month": 10,
+    "year": 2025,
+    "student_name": "Ahmad",
+    "note": "Filtered by student name and month"
+  }
 }
 ```
 
