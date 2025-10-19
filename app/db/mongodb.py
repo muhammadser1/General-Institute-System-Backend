@@ -16,6 +16,7 @@ class MongoDatabase:
         self.client = None
         self.db = None
         self.users_collection = None
+        self.students_collection = None
         self.lessons_collection = None
         self.payments_collection = None
         self.pricing_collection = None
@@ -50,12 +51,13 @@ class MongoDatabase:
             
             # Initialize collections
             self.users_collection = self.db["users"]
+            self.students_collection = self.db["students"]
             self.lessons_collection = self.db["lessons"]
             self.payments_collection = self.db["payments"]
             self.pricing_collection = self.db["pricing"]
             
             logger.info(f"✅ Connected to database: {config.MONGO_DATABASE}")
-            logger.info(f"📚 Collections initialized: users, lessons, payments, pricing")
+            logger.info(f"📚 Collections initialized: users, students, lessons, payments, pricing")
             
             # Create indexes
             self.create_indexes()
@@ -78,6 +80,11 @@ class MongoDatabase:
             self.users_collection.create_index("email")
             self.users_collection.create_index("role")
             self.users_collection.create_index("status")
+            
+            # Students collection indexes
+            self.students_collection.create_index("full_name")
+            self.students_collection.create_index("email")
+            self.students_collection.create_index("is_active")
             
             # Lessons collection indexes
             self.lessons_collection.create_index("teacher_id")

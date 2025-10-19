@@ -92,3 +92,89 @@ def get_monthly_payments(
     )
 
 
+@router.get("/student/{student_name}")
+def get_student_payments(
+    student_name: str,
+    current_admin: Dict = Depends(get_current_admin)
+):
+    """
+    Admin gets all payments for a specific student
+    - Shows all payments made by the student
+    - Shows total amount paid
+    """
+    # Get all payments for the student
+    payments = Payment.find_by_student_name(student_name, mongo_db.payments_collection)
+    
+    if not payments:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No payments found for student '{student_name}'"
+        )
+    
+    # Calculate total amount
+    total_amount = Payment.calculate_total(payments)
+    
+    # Convert to response
+    payment_responses = [
+        PaymentResponse(
+            id=payment._id,
+            student_name=payment.student_name,
+            student_email=payment.student_email,
+            amount=payment.amount,
+            payment_date=payment.payment_date,
+            lesson_id=payment.lesson_id,
+            notes=payment.notes,
+            created_at=payment.created_at,
+        )
+        for payment in payments
+    ]
+    
+    return {
+        "student_name": student_name,
+        "total_payments": len(payments),
+        "total_amount": total_amount,
+        "payments": payment_responses
+    }
+
+
+@router.get("/student/{student_name}/total")
+def get_student_total(
+    student_name: str,
+    current_admin: Dict = Depends(get_current_admin)
+):
+    """
+    Admin gets total amount paid by a specific student
+    - Quick summary endpoint
+    """
+    # Get all payments for the student
+    payments = Payment.find_by_student_name(student_name, mongo_db.payments_collection)
+    
+    # Calculate total amount
+    total_amount = Payment.calculate_total(payments)
+    
+    return {
+        "student_name": student_name,
+        "total_payments": len(payments),
+        "total_amount": total_amount,
+        "currency": "USD"
+    }
+
+
+@router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_payment(
+    payment_id: str,
+    current_admin: Dict = Depends(get_current_admin)
+):
+    """
+    Admin deletes a payment record
+    """
+    payment = Payment.find_by_id(payment_id, mongo_db.payments_collection)
+    
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment not found"
+        )
+    
+    payment.delete(mongo_db.payments_collection)
+    return None
