@@ -16,9 +16,8 @@ Base URL: `http://localhost:8000/api/v1`
 6. [Pricing Management](#pricing-management)
 7. [Admin Management](#admin-management)
 8. [Dashboard & Statistics](#dashboard--statistics)
-9. [Weekly Reports](#weekly-reports)
-10. [Pricing Population](#pricing-population)
-11. [Test Endpoints](#test-endpoints)
+9. [Pricing Population](#pricing-population)
+10. [Test Endpoints](#test-endpoints)
 
 ---
 
@@ -840,6 +839,22 @@ Authorization: Bearer <your-token>
 
 **Headers:** `Authorization: Bearer <admin-token>`
 
+**Query Parameters:**
+- `month` (optional): 1-12 (Filter by month)
+- `year` (optional): 2000-2100 (Filter by year)
+
+**Examples:**
+```bash
+# All time stats
+GET /dashboard/stats
+
+# January 2025 stats
+GET /dashboard/stats?month=1&year=2025
+
+# December 2025 stats
+GET /dashboard/stats?month=12&year=2025
+```
+
 **Response (200 OK):**
 ```json
 {
@@ -863,9 +878,16 @@ Authorization: Bearer <your-token>
   },
   "pricing": {
     "active_subjects": 15
+  },
+  "filter": {
+    "month": 1,
+    "year": 2025,
+    "note": "Statistics filtered by month and year"
   }
 }
 ```
+
+**Note:** When month and year are provided, lessons and payments are filtered by that month. Users, students, and pricing always show total counts.
 
 ### Get Teachers Stats (Admin Only)
 
@@ -921,6 +943,22 @@ Authorization: Bearer <your-token>
 
 **Headers:** `Authorization: Bearer <admin-token>`
 
+**Query Parameters:**
+- `month` (optional): 1-12 (Filter by month)
+- `year` (optional): 2000-2100 (Filter by year)
+
+**Examples:**
+```bash
+# All time lesson stats
+GET /dashboard/stats/lessons
+
+# January 2025 lesson stats
+GET /dashboard/stats/lessons?month=1&year=2025
+
+# December 2025 lesson stats
+GET /dashboard/stats/lessons?month=12&year=2025
+```
+
 **Response (200 OK):**
 ```json
 {
@@ -935,31 +973,37 @@ Authorization: Bearer <your-token>
     "cancelled_lessons": 5,
     "total_lessons": 100
   },
-  "total_hours": 500.50
+  "total_hours": 500.50,
+  "filter": {
+    "month": 1,
+    "year": 2025,
+    "note": "Statistics filtered by month and year"
+  }
 }
 ```
+
+**Note:** When month and year are provided, lessons are filtered by scheduled_date for that specific month.
 
 ---
 
-## Weekly Reports
+## Notes
 
-### Send Weekly Report (Admin Only)
+1. **Authentication:** Most endpoints require a valid Bearer token. Get one by logging in at `/user/login`.
 
-**Endpoint:** `POST /weekly-report/send-weekly-report`
+2. **Admin vs Teacher:** Some endpoints are admin-only, others are available to both admins and teachers.
 
-**Headers:** `Authorization: Bearer <admin-token>`
+3. **Arabic Names:** The system fully supports Arabic names for students and teachers.
 
-**Response (200 OK):**
-```json
-{
-  "success": true,
-  "message": "Weekly lesson report sent successfully",
-  "recipient": "EMAIL_TO configured in .env",
-  "triggered_by": "admin@example.com"
-}
-```
+4. **Email Notifications:** Crash notifications are automatically sent to `EMAIL_TO` when errors occur.
 
-**Note:** This endpoint sends a CSV report of all lessons from the past 7 days to the configured `EMAIL_TO` address.
+5. **Month Filtering:** Dashboard and lessons stats support optional month/year filtering:
+   - `month`: 1-12
+   - `year`: 2000-2100
+   - When provided, lessons are filtered by `scheduled_date`
+   - Payments are filtered by `payment_date`
+   - Users and students always show total counts
+
+6. **Development Mode:** Test endpoints are only available when `DEBUG=True` or `ENVIRONMENT=development`.
 
 ---
 
@@ -1143,24 +1187,6 @@ Authorization: Bearer <your-token>
 | 403 | Forbidden - Insufficient permissions |
 | 404 | Not Found - Resource doesn't exist |
 | 500 | Internal Server Error - Server error |
-
----
-
-## Notes
-
-1. **Authentication:** Most endpoints require a valid Bearer token. Get one by logging in at `/user/login`.
-
-2. **Admin vs Teacher:** Some endpoints are admin-only, others are available to both admins and teachers.
-
-3. **Arabic Names:** The system fully supports Arabic names for students and teachers.
-
-4. **Email Notifications:** Crash notifications are automatically sent to `EMAIL_TO` when errors occur.
-
-5. **Weekly Reports:** Automatic weekly lesson reports are sent every Saturday at 9:00 AM.
-
-6. **Development Mode:** Test endpoints are only available when `DEBUG=True` or `ENVIRONMENT=development`.
-
----
 
 **Last Updated:** January 19, 2025
 

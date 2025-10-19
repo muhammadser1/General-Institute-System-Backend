@@ -2,8 +2,8 @@
 Dashboard/Statistics Endpoints
 Provides overview statistics for admins
 """
-from fastapi import APIRouter, Depends
-from typing import Dict
+from fastapi import APIRouter, Depends, Query
+from typing import Dict, Optional
 from app.api.deps import get_current_admin
 from app.db import mongo_db
 
@@ -12,10 +12,14 @@ router = APIRouter()
 
 @router.get("/stats")
 def get_dashboard_stats(
-    current_admin: Dict = Depends(get_current_admin)
+    current_admin: Dict = Depends(get_current_admin),
+    month: Optional[int] = None,
+    year: Optional[int] = None
 ):
     """
     Admin dashboard statistics
+    Optional filters: month (1-12) and year (2000-2100)
+    
     Returns:
     - Total teachers count
     - Total students count
@@ -25,36 +29,59 @@ def get_dashboard_stats(
     - Total payments count
     - Total revenue
     """
+    from datetime import datetime
     
-    # Count teachers
+    # Count teachers (always total, not filtered by month)
     teachers_count = mongo_db.users_collection.count_documents({"role": "teacher", "status": "active"})
     
-    # Count admins
+    # Count admins (always total, not filtered by month)
     admins_count = mongo_db.users_collection.count_documents({"role": "admin", "status": "active"})
     
-    # Count students
+    # Count students (always total, not filtered by month)
     students_count = mongo_db.students_collection.count_documents({"is_active": True})
     
+    # Build lesson query with optional month filter
+    lesson_query = {}
+    if month and year:
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+        lesson_query["scheduled_date"] = {"$gte": start_date, "$lt": end_date}
+    
     # Count lessons by status
-    pending_lessons_count = mongo_db.lessons_collection.count_documents({"status": "pending"})
-    completed_lessons_count = mongo_db.lessons_collection.count_documents({"status": "completed"})
-    cancelled_lessons_count = mongo_db.lessons_collection.count_documents({"status": "cancelled"})
-    total_lessons_count = mongo_db.lessons_collection.count_documents({})
+    pending_query = {**lesson_query, "status": "pending"}
+    completed_query = {**lesson_query, "status": "completed"}
+    cancelled_query = {**lesson_query, "status": "cancelled"}
+    
+    pending_lessons_count = mongo_db.lessons_collection.count_documents(pending_query)
+    completed_lessons_count = mongo_db.lessons_collection.count_documents(completed_query)
+    cancelled_lessons_count = mongo_db.lessons_collection.count_documents(cancelled_query)
+    total_lessons_count = mongo_db.lessons_collection.count_documents(lesson_query)
+    
+    # Build payment query with optional month filter
+    payment_query = {}
+    if month and year:
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+        payment_query["payment_date"] = {"$gte": start_date, "$lt": end_date}
     
     # Count payments and calculate total revenue
-    payments_count = mongo_db.payments_collection.count_documents({})
+    payments_count = mongo_db.payments_collection.count_documents(payment_query)
     
     # Calculate total revenue from payments
-    pipeline = [
-        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
-    ]
+    pipeline = [{"$match": payment_query}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     result = list(mongo_db.payments_collection.aggregate(pipeline))
     total_revenue = result[0]["total"] if result else 0
     
-    # Count pricing subjects
+    # Count pricing subjects (always total, not filtered by month)
     pricing_count = mongo_db.pricing_collection.count_documents({"is_active": True})
     
-    return {
+    response = {
         "users": {
             "total_teachers": teachers_count,
             "total_admins": admins_count,
@@ -77,6 +104,16 @@ def get_dashboard_stats(
             "active_subjects": pricing_count
         }
     }
+    
+    # Add filter info if month/year provided
+    if month and year:
+        response["filter"] = {
+            "month": month,
+            "year": year,
+            "note": "Statistics filtered by month and year"
+        }
+    
+    return response
 
 
 @router.get("/stats/teachers")
@@ -158,29 +195,49 @@ def get_students_stats(
 
 @router.get("/stats/lessons")
 def get_lessons_stats(
-    current_admin: Dict = Depends(get_current_admin)
+    current_admin: Dict = Depends(get_current_admin),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month (1-12)"),
+    year: Optional[int] = Query(None, ge=2000, le=2100, description="Filter by year")
 ):
     """
     Get detailed statistics about lessons
+    Optional filters: month (1-12) and year (2000-2100)
     """
+    from datetime import datetime
+    
+    # Build query with optional month filter
+    query = {}
+    if month and year:
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+        query["scheduled_date"] = {"$gte": start_date, "$lt": end_date}
+    
     # Count by type
-    individual_count = mongo_db.lessons_collection.count_documents({"lesson_type": "individual"})
-    group_count = mongo_db.lessons_collection.count_documents({"lesson_type": "group"})
+    individual_query = {**query, "lesson_type": "individual"}
+    group_query = {**query, "lesson_type": "group"}
+    
+    individual_count = mongo_db.lessons_collection.count_documents(individual_query)
+    group_count = mongo_db.lessons_collection.count_documents(group_query)
     
     # Count by status
-    pending_count = mongo_db.lessons_collection.count_documents({"status": "pending"})
-    completed_count = mongo_db.lessons_collection.count_documents({"status": "completed"})
-    cancelled_count = mongo_db.lessons_collection.count_documents({"status": "cancelled"})
+    pending_query = {**query, "status": "pending"}
+    completed_query = {**query, "status": "completed"}
+    cancelled_query = {**query, "status": "cancelled"}
+    
+    pending_count = mongo_db.lessons_collection.count_documents(pending_query)
+    completed_count = mongo_db.lessons_collection.count_documents(completed_query)
+    cancelled_count = mongo_db.lessons_collection.count_documents(cancelled_query)
     
     # Calculate total hours
-    pipeline = [
-        {"$group": {"_id": None, "total_minutes": {"$sum": "$duration_minutes"}}}
-    ]
+    pipeline = [{"$match": query}, {"$group": {"_id": None, "total_minutes": {"$sum": "$duration_minutes"}}}]
     result = list(mongo_db.lessons_collection.aggregate(pipeline))
     total_minutes = result[0]["total_minutes"] if result else 0
     total_hours = round(total_minutes / 60, 2)
     
-    return {
+    response = {
         "by_type": {
             "individual_lessons": individual_count,
             "group_lessons": group_count,
@@ -194,4 +251,14 @@ def get_lessons_stats(
         },
         "total_hours": total_hours
     }
+    
+    # Add filter info if month/year provided
+    if month and year:
+        response["filter"] = {
+            "month": month,
+            "year": year,
+            "note": "Statistics filtered by month and year"
+        }
+    
+    return response
 

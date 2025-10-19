@@ -21,6 +21,7 @@ def mock_db():
     
     # Create collections
     users_collection = db["users"]
+    students_collection = db["students"]
     lessons_collection = db["lessons"]
     payments_collection = db["payments"]
     pricing_collection = db["pricing"]
@@ -28,6 +29,7 @@ def mock_db():
     yield {
         "db": db,
         "users": users_collection,
+        "students": students_collection,
         "lessons": lessons_collection,
         "payments": payments_collection,
         "pricing": pricing_collection
@@ -126,4 +128,3 @@ def inactive_user(create_test_user):
         email="inactive@example.com",
         status=UserStatus.INACTIVE
     )
-
