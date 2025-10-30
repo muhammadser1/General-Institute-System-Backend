@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import datetime
+import logging
 from app.schemas.user import (
     LoginRequest, 
     LoginResponse, 
@@ -8,12 +9,16 @@ from app.schemas.user import (
     TeacherSignup, 
     UserResponse,
     UserRole,
-    UserStatus
+    UserStatus,
+    ProfileUpdate,
+    ChangePasswordRequest
 )
 from app.models.user import User
 from app.db import mongo_db
 from app.core.security import verify_password, create_access_token, get_password_hash
 from app.api.deps import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -101,55 +106,124 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
     )
 
 
-@router.post("/teacher/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def teacher_signup(signup_data: TeacherSignup):
+@router.put("/me", response_model=UserResponse)
+def update_profile(
+    profile_data: ProfileUpdate,
+    current_user: dict = Depends(get_current_user)
+):
     """
-    Teacher self-registration (public endpoint)
-    Teachers can create their own account
+    Update current user's profile (name, phone, email)
     """
-    # Check if username already exists using model method
-    if User.username_exists(signup_data.username, mongo_db.users_collection):
+    user_id = str(current_user["_id"])
+    username = current_user.get("username")
+    
+    logger.info(f"Profile update requested by user {username} (ID: {user_id})")
+    
+    # Get user from database
+    user = User.find_by_id(user_id, mongo_db.users_collection)
+    
+    if not user:
+        logger.warning(f"User not found for profile update: {user_id}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already exists",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
         )
     
-    # Check if email already exists using model method
-    if User.email_exists(signup_data.email, mongo_db.users_collection):
+    # Log current values
+    old_values = {
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+        "phone": user.phone
+    }
+    logger.debug(f"Current profile values for {username}: {old_values}")
+    
+    # Check email uniqueness if updating email
+    if profile_data.email and profile_data.email != user.email:
+        logger.info(f"User {username} attempting to change email from {user.email} to {profile_data.email}")
+        if User.email_exists(profile_data.email, mongo_db.users_collection):
+            logger.warning(f"Email already exists: {profile_data.email} for user {username}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already exists",
+            )
+    
+    # Prepare update data
+    update_data = profile_data.model_dump(exclude_unset=True)
+    update_data["updated_at"] = datetime.utcnow()
+    
+    # Log changes
+    changes = {}
+    for key, new_value in update_data.items():
+        if key in old_values and old_values[key] != new_value:
+            changes[key] = {"old": old_values[key], "new": new_value}
+    
+    if changes:
+        logger.info(f"Profile update changes for {username}: {changes}")
+    else:
+        logger.info(f"No actual changes detected for {username}")
+    
+    # Update user
+    try:
+        user.update_in_db(mongo_db.users_collection, update_data)
+        logger.info(f"Profile updated successfully for user {username} (ID: {user_id})")
+    except Exception as e:
+        logger.error(f"Error updating profile for user {username} (ID: {user_id}): {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already exists",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update profile"
         )
     
-    # Create new teacher using User model
-    new_teacher = User(
-        username=signup_data.username,
-        hashed_password=get_password_hash(signup_data.password),
-        role=UserRole.TEACHER,  # Always teacher for self-signup
-        status=UserStatus.ACTIVE,  # Active by default
-        email=signup_data.email,
-        first_name=signup_data.first_name,
-        last_name=signup_data.last_name,
-        phone=signup_data.phone,
-        birthdate=signup_data.birthdate,
-    )
+    # Get updated user
+    updated_user = User.find_by_id(user_id, mongo_db.users_collection)
     
-    # Save to database using model method
-    new_teacher.save(mongo_db.users_collection)
-    
-    # Return user response
     return UserResponse(
-        id=new_teacher._id,
-        username=new_teacher.username,
-        role=new_teacher.role,
-        status=new_teacher.status,
-        email=new_teacher.email,
-        first_name=new_teacher.first_name,
-        last_name=new_teacher.last_name,
-        phone=new_teacher.phone,
-        birthdate=new_teacher.birthdate,
-        last_login=new_teacher.last_login,
-        created_at=new_teacher.created_at,
-        updated_at=new_teacher.updated_at,
+        id=updated_user._id,
+        username=updated_user.username,
+        role=updated_user.role,
+        status=updated_user.status,
+        email=updated_user.email,
+        first_name=updated_user.first_name,
+        last_name=updated_user.last_name,
+        phone=updated_user.phone,
+        birthdate=updated_user.birthdate,
+        last_login=updated_user.last_login,
+        created_at=updated_user.created_at,
+        updated_at=updated_user.updated_at,
     )
+
+
+@router.put("/me/change-password")
+def change_password(
+    password_data: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Change current user's password
+    """
+    # Get user from database
+    user = User.find_by_id(str(current_user["_id"]), mongo_db.users_collection)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    # Verify old password
+    if not verify_password(password_data.old_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect current password",
+        )
+    
+    # Update password
+    new_hashed_password = get_password_hash(password_data.new_password)
+    user.update_in_db(mongo_db.users_collection, {
+        "hashed_password": new_hashed_password,
+        "updated_at": datetime.utcnow()
+    })
+    
+    return {"message": "Password updated successfully"}
+
 

@@ -12,8 +12,17 @@ class LessonType(str, Enum):
 
 class LessonStatus(str, Enum):
     PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+class EducationLevel(str, Enum):
+    """Education levels for lessons and pricing"""
+    ELEMENTARY = "elementary"  # ابتدائي
+    MIDDLE = "middle"  # اعدادي
+    SECONDARY = "secondary"  # ثانوي
 
 
 # MongoDB Model (works with PyMongo)
@@ -27,17 +36,14 @@ class Lesson:
         self,
         teacher_id: str,
         teacher_name: str,
-        title: str,
         subject: str,
+        education_level: EducationLevel,
         lesson_type: LessonType,
         scheduled_date: datetime,
         duration_minutes: int,
         status: LessonStatus = LessonStatus.PENDING,
-        description: Optional[str] = None,
         max_students: Optional[int] = None,
         students: Optional[List[Dict[str, Any]]] = None,
-        notes: Optional[str] = None,
-        homework: Optional[str] = None,
         _id: Optional[str] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
@@ -46,17 +52,14 @@ class Lesson:
         self._id = _id or str(uuid.uuid4())
         self.teacher_id = teacher_id
         self.teacher_name = teacher_name
-        self.title = title
-        self.description = description
         self.lesson_type = lesson_type
         self.subject = subject
+        self.education_level = education_level
         self.scheduled_date = scheduled_date
         self.duration_minutes = duration_minutes
         self.max_students = max_students
         self.status = status
         self.students = students or []
-        self.notes = notes
-        self.homework = homework
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at
         self.completed_at = completed_at
@@ -67,17 +70,14 @@ class Lesson:
             "_id": self._id,
             "teacher_id": self.teacher_id,
             "teacher_name": self.teacher_name,
-            "title": self.title,
-            "description": self.description,
             "lesson_type": self.lesson_type.value if isinstance(self.lesson_type, LessonType) else self.lesson_type,
             "subject": self.subject,
+            "education_level": self.education_level.value if isinstance(self.education_level, EducationLevel) else self.education_level,
             "scheduled_date": self.scheduled_date,
             "duration_minutes": self.duration_minutes,
             "max_students": self.max_students,
             "status": self.status.value if isinstance(self.status, LessonStatus) else self.status,
             "students": self.students,
-            "notes": self.notes,
-            "homework": self.homework,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "completed_at": self.completed_at,
@@ -90,17 +90,14 @@ class Lesson:
             _id=data.get("_id"),
             teacher_id=data.get("teacher_id"),
             teacher_name=data.get("teacher_name"),
-            title=data.get("title"),
-            description=data.get("description"),
             lesson_type=LessonType(data.get("lesson_type", "individual")),
             subject=data.get("subject"),
+            education_level=EducationLevel(data.get("education_level", "elementary")),
             scheduled_date=data.get("scheduled_date"),
             duration_minutes=data.get("duration_minutes"),
             max_students=data.get("max_students"),
             status=LessonStatus(data.get("status", "pending")),
             students=data.get("students", []),
-            notes=data.get("notes"),
-            homework=data.get("homework"),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             completed_at=data.get("completed_at")
@@ -150,6 +147,24 @@ class Lesson:
         self.status = LessonStatus.CANCELLED
         self.updated_at = datetime.utcnow()
     
+    def approve(self):
+        """Approve lesson (admin action)"""
+        self.status = LessonStatus.APPROVED
+        self.updated_at = datetime.utcnow()
+    
+    def reject(self):
+        """Reject lesson (admin action)"""
+        self.status = LessonStatus.REJECTED
+        self.updated_at = datetime.utcnow()
+    
+    def is_approved(self) -> bool:
+        """Check if lesson is approved"""
+        return self.status == LessonStatus.APPROVED
+    
+    def is_rejected(self) -> bool:
+        """Check if lesson is rejected"""
+        return self.status == LessonStatus.REJECTED
+    
     # Static database methods
     @staticmethod
     def find_by_id(lesson_id: str, db_collection) -> Optional["Lesson"]:
@@ -198,5 +213,5 @@ class Lesson:
         })
     
     def __repr__(self):
-        return f"<Lesson(id={self._id}, title={self.title}, teacher={self.teacher_name}, status={self.status})>"
+        return f"<Lesson(id={self._id}, subject={self.subject}, teacher={self.teacher_name}, status={self.status})>"
 

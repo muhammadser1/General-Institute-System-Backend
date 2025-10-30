@@ -64,7 +64,16 @@ class LogoutResponse(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     """Change password request"""
+    old_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=6, max_length=100)
+
+
+class ProfileUpdate(BaseModel):
+    """User updates their own profile"""
+    first_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
 
 
 # -----------------------------------------------------------

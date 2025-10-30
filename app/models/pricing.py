@@ -7,46 +7,45 @@ Admins can manage pricing through API endpoints.
 
 from typing import Optional, Dict, Any
 from datetime import datetime
+from enum import Enum
 import uuid
+
+
+class EducationLevel(str, Enum):
+    """Education levels for pricing"""
+    ELEMENTARY = "elementary"  # ابتدائي
+    MIDDLE = "middle"  # اعدادي
+    SECONDARY = "secondary"  # ثانوي
 
 
 class Pricing:
     """
     Pricing Model - Represents the 'pricing' collection in MongoDB
-    Stores pricing per subject for individual and group lessons
+    Stores pricing per subject and education level for individual and group lessons
     """
     
     def __init__(
         self,
         subject: str,
+        education_level: EducationLevel,
         individual_price: float,
         group_price: float,
-        currency: str = "USD",
-        is_active: bool = True,
-        _id: Optional[str] = None,
-        created_at: Optional[datetime] = None,
-        updated_at: Optional[datetime] = None
+        _id: Optional[str] = None
     ):
         self._id = _id or str(uuid.uuid4())
-        self.subject = subject.strip()  # e.g., "Mathematics", "Physics"
+        self.subject = subject.strip()  # e.g., "Mathematics", "Physics", "Arabic"
+        self.education_level = education_level  # elementary, middle, secondary
         self.individual_price = individual_price
         self.group_price = group_price
-        self.currency = currency
-        self.is_active = is_active
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert Pricing object to dictionary for MongoDB insertion"""
         return {
             "_id": self._id,
             "subject": self.subject,
+            "education_level": self.education_level.value if isinstance(self.education_level, EducationLevel) else self.education_level,
             "individual_price": self.individual_price,
-            "group_price": self.group_price,
-            "currency": self.currency,
-            "is_active": self.is_active,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "group_price": self.group_price
         }
     
     @staticmethod
@@ -55,26 +54,46 @@ class Pricing:
         return Pricing(
             _id=data.get("_id"),
             subject=data.get("subject"),
+            education_level=EducationLevel(data.get("education_level", "elementary")),
             individual_price=data.get("individual_price"),
-            group_price=data.get("group_price"),
-            currency=data.get("currency", "USD"),
-            is_active=data.get("is_active", True),
-            created_at=data.get("created_at"),
-            updated_at=data.get("updated_at")
+            group_price=data.get("group_price")
         )
     
     # ===== Database Methods =====
     
     @staticmethod
-    def find_by_subject(subject: str, db_collection) -> Optional["Pricing"]:
-        """Find active pricing by subject name (case-insensitive)"""
+    def find_by_subject_and_level(subject: str, education_level: str, db_collection) -> Optional["Pricing"]:
+        """Find pricing by subject name and education level (case-insensitive)
+        
+        First tries exact match, then tries to find any pricing for the subject
+        (handles cases where education_level is None or doesn't match)
+        """
+        # First, try exact match
         pricing_doc = db_collection.find_one({
             "subject": {"$regex": f"^{subject}$", "$options": "i"},
-            "is_active": True
+            "education_level": education_level
         })
+        
         if pricing_doc:
             return Pricing.from_dict(pricing_doc)
+        
+        # If not found, try to find any pricing for this subject (handle None education_level)
+        pricing_doc = db_collection.find_one({
+            "subject": {"$regex": f"^{subject}$", "$options": "i"}
+        })
+        
+        if pricing_doc:
+            return Pricing.from_dict(pricing_doc)
+        
         return None
+    
+    @staticmethod
+    def find_by_subject(subject: str, db_collection) -> list["Pricing"]:
+        """Find all pricing for a subject (all education levels)"""
+        pricing_docs = db_collection.find({
+            "subject": {"$regex": f"^{subject}$", "$options": "i"}
+        }).sort("education_level", 1)
+        return [Pricing.from_dict(doc) for doc in pricing_docs]
     
     @staticmethod
     def find_by_id(pricing_id: str, db_collection) -> Optional["Pricing"]:
@@ -85,16 +104,17 @@ class Pricing:
         return None
     
     @staticmethod
-    def get_all_active(db_collection) -> list["Pricing"]:
-        """Get all active pricing"""
-        pricing_docs = db_collection.find({"is_active": True}).sort("subject", 1)
+    def get_all(db_collection) -> list["Pricing"]:
+        """Get all pricing"""
+        pricing_docs = db_collection.find({}).sort("subject", 1)
         return [Pricing.from_dict(doc) for doc in pricing_docs]
     
     @staticmethod
-    def subject_exists(subject: str, db_collection, exclude_id: Optional[str] = None) -> bool:
-        """Check if subject already exists (case-insensitive)"""
+    def subject_and_level_exists(subject: str, education_level: str, db_collection, exclude_id: Optional[str] = None) -> bool:
+        """Check if subject + education level combination already exists (case-insensitive)"""
         query = {
-            "subject": {"$regex": f"^{subject}$", "$options": "i"}
+            "subject": {"$regex": f"^{subject}$", "$options": "i"},
+            "education_level": education_level
         }
         if exclude_id:
             query["_id"] = {"$ne": exclude_id}
@@ -106,7 +126,6 @@ class Pricing:
     
     def update_in_db(self, db_collection):
         """Update pricing in database"""
-        self.updated_at = datetime.utcnow()
         db_collection.update_one(
             {"_id": self._id},
             {"$set": self.to_dict()}

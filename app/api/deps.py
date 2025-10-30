@@ -1,10 +1,11 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Dict
+from typing import Dict, Optional
 from app.core.security import verify_token
 from app.db import mongo_db
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
@@ -74,4 +75,32 @@ def get_current_teacher(
             detail="Teacher access required",
         )
     return current_user
+
+
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)
+) -> Optional[Dict]:
+    """
+    Get current user if authenticated, otherwise return None.
+    Used for endpoints that are public but may have different behavior for authenticated users.
+    """
+    if not credentials:
+        return None
+    
+    token = credentials.credentials
+    payload = verify_token(token)
+    
+    if not payload:
+        return None
+    
+    user_id: str = payload.get("sub")
+    if not user_id:
+        return None
+    
+    user = mongo_db.users_collection.find_one({"_id": user_id})
+    
+    if not user or user.get("status") != "active":
+        return None
+    
+    return user
 

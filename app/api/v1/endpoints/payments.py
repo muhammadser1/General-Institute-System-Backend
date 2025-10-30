@@ -6,6 +6,7 @@ from app.schemas.payment import PaymentCreate, PaymentResponse, MonthlyPaymentsR
 from app.models.payment import Payment
 from app.api.deps import get_current_admin
 from app.db import mongo_db
+from app.core.pricing import get_subject_price
 
 router = APIRouter()
 
@@ -207,6 +208,112 @@ def get_student_total(
         "total_amount": total_amount,
         "currency": "USD"
     }
+
+
+@router.get("/student/{student_name}/cost-summary")
+def get_student_cost_summary(
+    student_name: str,
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month (1-12)"),
+    year: Optional[int] = Query(None, ge=2000, le=2100, description="Filter by year"),
+    current_admin: Dict = Depends(get_current_admin)
+):
+    """
+    Admin gets student cost summary (lessons cost vs paid amount)
+    - Shows total lessons cost for approved/completed lessons
+    - Shows total paid amount
+    - Shows outstanding balance
+    - Optional month/year filter
+    """
+    # Build query for lessons
+    lesson_query = {
+        "students.student_name": {"$regex": student_name, "$options": "i"},
+        "status": {"$in": ["approved", "completed"]}  # Only count approved or completed lessons
+    }
+    
+    # Date filter
+    if month or year:
+        if not (month and year):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Both month and year are required for filtering"
+            )
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+        lesson_query["scheduled_date"] = {"$gte": start_date, "$lt": end_date}
+    
+    # Get all lessons for this student
+    lessons = list(mongo_db.lessons_collection.find(lesson_query))
+    
+    # Calculate total lesson cost
+    total_cost = 0.0
+    missing_subjects = []
+    for lesson in lessons:
+        subject = lesson.get("subject", "")
+        education_level = lesson.get("education_level", "elementary")
+        lesson_type = lesson.get("lesson_type", "individual")
+        duration_minutes = lesson.get("duration_minutes", 0)
+        hours = duration_minutes / 60
+        
+        # Get price per hour from pricing system
+        from app.models.pricing import Pricing
+        pricing = Pricing.find_by_subject_and_level(subject, education_level, mongo_db.pricing_collection)
+        
+        if pricing:
+            price_per_hour = pricing.get_price(lesson_type)
+        else:
+            # Subject not found, use default
+            from app.core.pricing import DEFAULT_INDIVIDUAL_PRICE, DEFAULT_GROUP_PRICE
+            price_per_hour = DEFAULT_INDIVIDUAL_PRICE if lesson_type.lower() == "individual" else DEFAULT_GROUP_PRICE
+            missing_subjects.append({
+                "subject": subject,
+                "education_level": education_level,
+                "lesson_type": lesson_type,
+                "used_default_price": price_per_hour
+            })
+        
+        lesson_cost = hours * price_per_hour
+        total_cost += lesson_cost
+    
+    # Get total paid
+    payment_query = {"student_name": {"$regex": student_name, "$options": "i"}}
+    if month and year:
+        payment_query["payment_date"] = {"$gte": start_date, "$lt": end_date}
+    
+    payments = list(mongo_db.payments_collection.find(payment_query))
+    total_paid = sum(p.get("amount", 0) for p in payments)
+    
+    # Calculate outstanding balance
+    outstanding_balance = round(total_cost - total_paid, 2)
+    
+    response = {
+        "student_name": student_name,
+        "total_lessons_cost": round(total_cost, 2),
+        "total_paid": round(total_paid, 2),
+        "outstanding_balance": outstanding_balance,
+        "lessons_count": len(lessons),
+        "payments_count": len(payments),
+        "currency": "USD"
+    }
+    
+    # Warn if any subjects were not found in pricing database
+    if missing_subjects:
+        response["warning"] = {
+            "message": "Some subjects not found in pricing database, used default prices",
+            "missing_subjects": missing_subjects
+        }
+    
+    # Add filter info if month/year provided
+    if month and year:
+        response["filter"] = {
+            "month": month,
+            "year": year,
+            "note": "Statistics filtered by month and year"
+        }
+    
+    return response
 
 
 @router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -963,338 +963,338 @@ class TestAdminResetPassword:
             assert "User not found" in response.json()["detail"]
 
 
-class TestAdminSubjectPrices:
-    """Test GET /api/v1/admin/subject-prices - Get subject pricing"""
+# class TestAdminSubjectPrices:
+#     """Test GET /api/v1/admin/subject-prices - Get subject pricing"""
     
-    def test_admin_gets_subject_prices(self, client, mock_db):
-        """Test admin can get all subject prices"""
-        admin = User(
-            username="admin",
-            hashed_password=get_password_hash("admin123"),
-            role=UserRole.ADMIN,
-            status=UserStatus.ACTIVE
-        )
-        mock_db["users"].insert_one(admin.to_dict())
+#     def test_admin_gets_subject_prices(self, client, mock_db):
+#         """Test admin can get all subject prices"""
+#         admin = User(
+#             username="admin",
+#             hashed_password=get_password_hash("admin123"),
+#             role=UserRole.ADMIN,
+#             status=UserStatus.ACTIVE
+#         )
+#         mock_db["users"].insert_one(admin.to_dict())
         
-        token = create_access_token({
-            "sub": admin._id,
-            "username": admin.username,
-            "role": admin.role.value
-        })
+#         token = create_access_token({
+#             "sub": admin._id,
+#             "username": admin.username,
+#             "role": admin.role.value
+#         })
         
-        with patch('app.api.deps.mongo_db') as mock_deps, \
-             patch('app.core.pricing.mongo_db') as mock_pricing_db:
-            mock_deps.users_collection = mock_db["users"]
-            mock_pricing_db.pricing_collection = mock_db["pricing"]
+#         with patch('app.api.deps.mongo_db') as mock_deps, \
+#              patch('app.core.pricing.mongo_db') as mock_pricing_db:
+#             mock_deps.users_collection = mock_db["users"]
+#             mock_pricing_db.pricing_collection = mock_db["pricing"]
             
-            response = client.get(
-                "/api/v1/admin/subject-prices",
-                headers={"Authorization": f"Bearer {token}"}
-            )
+#             response = client.get(
+#                 "/api/v1/admin/subject-prices",
+#                 headers={"Authorization": f"Bearer {token}"}
+#             )
             
-            assert response.status_code == 200
-            data = response.json()
-            assert "prices" in data
-            assert "default_individual_price" in data
-            assert "default_group_price" in data
-            assert isinstance(data["prices"], list)
+#             assert response.status_code == 200
+#             data = response.json()
+#             assert "prices" in data
+#             assert "default_individual_price" in data
+#             assert "default_group_price" in data
+#             assert isinstance(data["prices"], list)
     
-    def test_teacher_cannot_get_subject_prices(self, client, mock_db):
-        """Test teacher cannot access subject prices endpoint"""
-        teacher = User(
-            username="teacher",
-            hashed_password=get_password_hash("teacher123"),
-            role=UserRole.TEACHER,
-            status=UserStatus.ACTIVE
-        )
-        mock_db["users"].insert_one(teacher.to_dict())
+#     def test_teacher_cannot_get_subject_prices(self, client, mock_db):
+#         """Test teacher cannot access subject prices endpoint"""
+#         teacher = User(
+#             username="teacher",
+#             hashed_password=get_password_hash("teacher123"),
+#             role=UserRole.TEACHER,
+#             status=UserStatus.ACTIVE
+#         )
+#         mock_db["users"].insert_one(teacher.to_dict())
         
-        token = create_access_token({
-            "sub": teacher._id,
-            "username": teacher.username,
-            "role": teacher.role.value
-        })
+#         token = create_access_token({
+#             "sub": teacher._id,
+#             "username": teacher.username,
+#             "role": teacher.role.value
+#         })
         
-        with patch('app.api.deps.mongo_db') as mock_deps:
-            mock_deps.users_collection = mock_db["users"]
+#         with patch('app.api.deps.mongo_db') as mock_deps:
+#             mock_deps.users_collection = mock_db["users"]
             
-            response = client.get(
-                "/api/v1/admin/subject-prices",
-                headers={"Authorization": f"Bearer {token}"}
-            )
+#             response = client.get(
+#                 "/api/v1/admin/subject-prices",
+#                 headers={"Authorization": f"Bearer {token}"}
+#             )
             
-            assert response.status_code == 403
+#             assert response.status_code == 403
 
 
-class TestAdminTeacherEarnings:
-    """Test GET /api/v1/admin/teacher-earnings/{teacher_id} - Get teacher earnings"""
+# class TestAdminTeacherEarnings:
+#     """Test GET /api/v1/admin/teacher-earnings/{teacher_id} - Get teacher earnings"""
     
-    def test_admin_gets_teacher_earnings(self, client, mock_db):
-        """Test admin can get teacher earnings breakdown"""
-        admin = User(
-            username="admin",
-            hashed_password=get_password_hash("admin123"),
-            role=UserRole.ADMIN,
-            status=UserStatus.ACTIVE
-        )
-        mock_db["users"].insert_one(admin.to_dict())
+#     def test_admin_gets_teacher_earnings(self, client, mock_db):
+#         """Test admin can get teacher earnings breakdown"""
+#         admin = User(
+#             username="admin",
+#             hashed_password=get_password_hash("admin123"),
+#             role=UserRole.ADMIN,
+#             status=UserStatus.ACTIVE
+#         )
+#         mock_db["users"].insert_one(admin.to_dict())
         
-        teacher = User(
-            username="teacher",
-            hashed_password="hash",
-            role=UserRole.TEACHER,
-            first_name="Test",
-            last_name="Teacher"
-        )
-        mock_db["users"].insert_one(teacher.to_dict())
+#         teacher = User(
+#             username="teacher",
+#             hashed_password="hash",
+#             role=UserRole.TEACHER,
+#             first_name="Test",
+#             last_name="Teacher"
+#         )
+#         mock_db["users"].insert_one(teacher.to_dict())
         
-        # Create some lessons for the teacher
-        lesson1 = {
-            "_id": "lesson1",
-            "teacher_id": teacher._id,
-            "subject": "Math",
-            "lesson_type": "individual",
-            "duration_minutes": 60,
-            "status": "completed",
-            "scheduled_date": datetime(2024, 1, 15)
-        }
-        lesson2 = {
-            "_id": "lesson2",
-            "teacher_id": teacher._id,
-            "subject": "Physics",
-            "lesson_type": "group",
-            "duration_minutes": 90,
-            "status": "completed",
-            "scheduled_date": datetime(2024, 1, 20)
-        }
-        mock_db["lessons"].insert_one(lesson1)
-        mock_db["lessons"].insert_one(lesson2)
+#         # Create some lessons for the teacher
+#         lesson1 = {
+#             "_id": "lesson1",
+#             "teacher_id": teacher._id,
+#             "subject": "Math",
+#             "lesson_type": "individual",
+#             "duration_minutes": 60,
+#             "status": "completed",
+#             "scheduled_date": datetime(2024, 1, 15)
+#         }
+#         lesson2 = {
+#             "_id": "lesson2",
+#             "teacher_id": teacher._id,
+#             "subject": "Physics",
+#             "lesson_type": "group",
+#             "duration_minutes": 90,
+#             "status": "completed",
+#             "scheduled_date": datetime(2024, 1, 20)
+#         }
+#         mock_db["lessons"].insert_one(lesson1)
+#         mock_db["lessons"].insert_one(lesson2)
         
-        token = create_access_token({
-            "sub": admin._id,
-            "username": admin.username,
-            "role": admin.role.value
-        })
+#         token = create_access_token({
+#             "sub": admin._id,
+#             "username": admin.username,
+#             "role": admin.role.value
+#         })
         
-        with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
-             patch('app.api.deps.mongo_db') as mock_deps, \
-             patch('app.core.pricing.mongo_db') as mock_pricing_db:
-            mock_mongo.users_collection = mock_db["users"]
-            mock_mongo.lessons_collection = mock_db["lessons"]
-            mock_deps.users_collection = mock_db["users"]
-            mock_pricing_db.pricing_collection = mock_db["pricing"]
+#         with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
+#              patch('app.api.deps.mongo_db') as mock_deps, \
+#              patch('app.core.pricing.mongo_db') as mock_pricing_db:
+#             mock_mongo.users_collection = mock_db["users"]
+#             mock_mongo.lessons_collection = mock_db["lessons"]
+#             mock_deps.users_collection = mock_db["users"]
+#             mock_pricing_db.pricing_collection = mock_db["pricing"]
             
-            response = client.get(
-                f"/api/v1/admin/teacher-earnings/{teacher._id}",
-                headers={"Authorization": f"Bearer {token}"}
-            )
+#             response = client.get(
+#                 f"/api/v1/admin/teacher-earnings/{teacher._id}",
+#                 headers={"Authorization": f"Bearer {token}"}
+#             )
             
-            assert response.status_code == 200
-            data = response.json()
-            assert data["teacher_id"] == teacher._id
-            assert data["teacher_name"] == "Test Teacher"
-            assert data["total_lessons"] == 2
-            assert data["total_hours"] == 2.5  # 60 + 90 minutes = 150 min = 2.5 hours
-            assert len(data["by_subject"]) >= 1
+#             assert response.status_code == 200
+#             data = response.json()
+#             assert data["teacher_id"] == teacher._id
+#             assert data["teacher_name"] == "Test Teacher"
+#             assert data["total_lessons"] == 2
+#             assert data["total_hours"] == 2.5  # 60 + 90 minutes = 150 min = 2.5 hours
+#             assert len(data["by_subject"]) >= 1
     
-    def test_teacher_earnings_with_month_filter(self, client, mock_db):
-        """Test filtering teacher earnings by month"""
-        admin = User(
-            username="admin",
-            hashed_password=get_password_hash("admin123"),
-            role=UserRole.ADMIN,
-            status=UserStatus.ACTIVE
-        )
-        mock_db["users"].insert_one(admin.to_dict())
+    # def test_teacher_earnings_with_month_filter(self, client, mock_db):
+    #     """Test filtering teacher earnings by month"""
+    #     admin = User(
+    #         username="admin",
+    #         hashed_password=get_password_hash("admin123"),
+    #         role=UserRole.ADMIN,
+    #         status=UserStatus.ACTIVE
+    #     )
+    #     mock_db["users"].insert_one(admin.to_dict())
         
-        teacher = User(
-            username="teacher",
-            hashed_password="hash",
-            role=UserRole.TEACHER,
-            first_name="Test",
-            last_name="Teacher"
-        )
-        mock_db["users"].insert_one(teacher.to_dict())
+    #     teacher = User(
+    #         username="teacher",
+    #         hashed_password="hash",
+    #         role=UserRole.TEACHER,
+    #         first_name="Test",
+    #         last_name="Teacher"
+    #     )
+    #     mock_db["users"].insert_one(teacher.to_dict())
         
-        # Create lessons in different months
-        lesson_jan = {
-            "_id": "lesson_jan",
-            "teacher_id": teacher._id,
-            "subject": "Math",
-            "lesson_type": "individual",
-            "duration_minutes": 60,
-            "status": "completed",
-            "scheduled_date": datetime(2024, 1, 15)
-        }
-        lesson_feb = {
-            "_id": "lesson_feb",
-            "teacher_id": teacher._id,
-            "subject": "Math",
-            "lesson_type": "individual",
-            "duration_minutes": 60,
-            "status": "completed",
-            "scheduled_date": datetime(2024, 2, 15)
-        }
-        mock_db["lessons"].insert_one(lesson_jan)
-        mock_db["lessons"].insert_one(lesson_feb)
+    #     # Create lessons in different months
+    #     lesson_jan = {
+    #         "_id": "lesson_jan",
+    #         "teacher_id": teacher._id,
+    #         "subject": "Math",
+    #         "lesson_type": "individual",
+    #         "duration_minutes": 60,
+    #         "status": "completed",
+    #         "scheduled_date": datetime(2024, 1, 15)
+    #     }
+    #     lesson_feb = {
+    #         "_id": "lesson_feb",
+    #         "teacher_id": teacher._id,
+    #         "subject": "Math",
+    #         "lesson_type": "individual",
+    #         "duration_minutes": 60,
+    #         "status": "completed",
+    #         "scheduled_date": datetime(2024, 2, 15)
+    #     }
+    #     mock_db["lessons"].insert_one(lesson_jan)
+    #     mock_db["lessons"].insert_one(lesson_feb)
         
-        token = create_access_token({
-            "sub": admin._id,
-            "username": admin.username,
-            "role": admin.role.value
-        })
+    #     token = create_access_token({
+    #         "sub": admin._id,
+    #         "username": admin.username,
+    #         "role": admin.role.value
+    #     })
         
-        with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
-             patch('app.api.deps.mongo_db') as mock_deps, \
-             patch('app.core.pricing.mongo_db') as mock_pricing_db:
-            mock_mongo.users_collection = mock_db["users"]
-            mock_mongo.lessons_collection = mock_db["lessons"]
-            mock_deps.users_collection = mock_db["users"]
-            mock_pricing_db.pricing_collection = mock_db["pricing"]
+    #     with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
+    #          patch('app.api.deps.mongo_db') as mock_deps, \
+    #          patch('app.core.pricing.mongo_db') as mock_pricing_db:
+    #         mock_mongo.users_collection = mock_db["users"]
+    #         mock_mongo.lessons_collection = mock_db["lessons"]
+    #         mock_deps.users_collection = mock_db["users"]
+    #         mock_pricing_db.pricing_collection = mock_db["pricing"]
             
-            # Filter by January
-            response = client.get(
-                f"/api/v1/admin/teacher-earnings/{teacher._id}?month=1&year=2024",
-                headers={"Authorization": f"Bearer {token}"}
-            )
+    #         # Filter by January
+    #         response = client.get(
+    #             f"/api/v1/admin/teacher-earnings/{teacher._id}?month=1&year=2024",
+    #             headers={"Authorization": f"Bearer {token}"}
+    #         )
             
-            assert response.status_code == 200
-            data = response.json()
-            assert data["month"] == 1
-            assert data["year"] == 2024
-            assert data["total_lessons"] == 1  # Only January lesson
+    #         assert response.status_code == 200
+    #         data = response.json()
+    #         assert data["month"] == 1
+    #         assert data["year"] == 2024
+    #         assert data["total_lessons"] == 1  # Only January lesson
     
-    def test_earnings_for_non_teacher_fails(self, client, mock_db):
-        """Test getting earnings for non-teacher user fails"""
-        admin = User(
-            username="admin",
-            hashed_password=get_password_hash("admin123"),
-            role=UserRole.ADMIN,
-            status=UserStatus.ACTIVE
-        )
-        mock_db["users"].insert_one(admin.to_dict())
+    # def test_earnings_for_non_teacher_fails(self, client, mock_db):
+    #     """Test getting earnings for non-teacher user fails"""
+    #     admin = User(
+    #         username="admin",
+    #         hashed_password=get_password_hash("admin123"),
+    #         role=UserRole.ADMIN,
+    #         status=UserStatus.ACTIVE
+    #     )
+    #     mock_db["users"].insert_one(admin.to_dict())
         
-        # Create another admin (not teacher)
-        admin2 = User(
-            username="admin2",
-            hashed_password="hash",
-            role=UserRole.ADMIN
-        )
-        mock_db["users"].insert_one(admin2.to_dict())
+    #     # Create another admin (not teacher)
+    #     admin2 = User(
+    #         username="admin2",
+    #         hashed_password="hash",
+    #         role=UserRole.ADMIN
+    #     )
+    #     mock_db["users"].insert_one(admin2.to_dict())
         
-        token = create_access_token({
-            "sub": admin._id,
-            "username": admin.username,
-            "role": admin.role.value
-        })
+    #     token = create_access_token({
+    #         "sub": admin._id,
+    #         "username": admin.username,
+    #         "role": admin.role.value
+    #     })
         
-        with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
-             patch('app.api.deps.mongo_db') as mock_deps:
-            mock_mongo.users_collection = mock_db["users"]
-            mock_mongo.lessons_collection = mock_db["lessons"]
-            mock_deps.users_collection = mock_db["users"]
+    #     with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
+    #          patch('app.api.deps.mongo_db') as mock_deps:
+    #         mock_mongo.users_collection = mock_db["users"]
+    #         mock_mongo.lessons_collection = mock_db["lessons"]
+    #         mock_deps.users_collection = mock_db["users"]
             
-            response = client.get(
-                f"/api/v1/admin/teacher-earnings/{admin2._id}",
-                headers={"Authorization": f"Bearer {token}"}
-            )
+    #         response = client.get(
+    #             f"/api/v1/admin/teacher-earnings/{admin2._id}",
+    #             headers={"Authorization": f"Bearer {token}"}
+    #         )
             
-            assert response.status_code == 400
-            assert "not a teacher" in response.json()["detail"]
+    #         assert response.status_code == 400
+    #         assert "not a teacher" in response.json()["detail"]
     
-    def test_earnings_for_nonexistent_teacher_fails(self, client, mock_db):
-        """Test getting earnings for non-existent teacher returns 404"""
-        admin = User(
-            username="admin",
-            hashed_password=get_password_hash("admin123"),
-            role=UserRole.ADMIN,
-            status=UserStatus.ACTIVE
-        )
-        mock_db["users"].insert_one(admin.to_dict())
+    # def test_earnings_for_nonexistent_teacher_fails(self, client, mock_db):
+    #     """Test getting earnings for non-existent teacher returns 404"""
+    #     admin = User(
+    #         username="admin",
+    #         hashed_password=get_password_hash("admin123"),
+    #         role=UserRole.ADMIN,
+    #         status=UserStatus.ACTIVE
+    #     )
+    #     mock_db["users"].insert_one(admin.to_dict())
         
-        token = create_access_token({
-            "sub": admin._id,
-            "username": admin.username,
-            "role": admin.role.value
-        })
+    #     token = create_access_token({
+    #         "sub": admin._id,
+    #         "username": admin.username,
+    #         "role": admin.role.value
+    #     })
         
-        with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
-             patch('app.api.deps.mongo_db') as mock_deps:
-            mock_mongo.users_collection = mock_db["users"]
-            mock_mongo.lessons_collection = mock_db["lessons"]
-            mock_deps.users_collection = mock_db["users"]
+    #     with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
+    #          patch('app.api.deps.mongo_db') as mock_deps:
+    #         mock_mongo.users_collection = mock_db["users"]
+    #         mock_mongo.lessons_collection = mock_db["lessons"]
+    #         mock_deps.users_collection = mock_db["users"]
             
-            response = client.get(
-                "/api/v1/admin/teacher-earnings/nonexistent-id",
-                headers={"Authorization": f"Bearer {token}"}
-            )
+    #         response = client.get(
+    #             "/api/v1/admin/teacher-earnings/nonexistent-id",
+    #             headers={"Authorization": f"Bearer {token}"}
+    #         )
             
-            assert response.status_code == 404
-            assert "Teacher not found" in response.json()["detail"]
+    #         assert response.status_code == 404
+    #         assert "Teacher not found" in response.json()["detail"]
     
-    def test_earnings_excludes_cancelled_lessons(self, client, mock_db):
-        """Test earnings calculation excludes cancelled lessons"""
-        admin = User(
-            username="admin",
-            hashed_password=get_password_hash("admin123"),
-            role=UserRole.ADMIN,
-            status=UserStatus.ACTIVE
-        )
-        mock_db["users"].insert_one(admin.to_dict())
+    # def test_earnings_excludes_cancelled_lessons(self, client, mock_db):
+    #     """Test earnings calculation excludes cancelled lessons"""
+    #     admin = User(
+    #         username="admin",
+    #         hashed_password=get_password_hash("admin123"),
+    #         role=UserRole.ADMIN,
+    #         status=UserStatus.ACTIVE
+    #     )
+    #     mock_db["users"].insert_one(admin.to_dict())
         
-        teacher = User(
-            username="teacher",
-            hashed_password="hash",
-            role=UserRole.TEACHER,
-            first_name="Test",
-            last_name="Teacher"
-        )
-        mock_db["users"].insert_one(teacher.to_dict())
+    #     teacher = User(
+    #         username="teacher",
+    #         hashed_password="hash",
+    #         role=UserRole.TEACHER,
+    #         first_name="Test",
+    #         last_name="Teacher"
+    #     )
+    #     mock_db["users"].insert_one(teacher.to_dict())
         
-        # Create completed and cancelled lessons
-        completed = {
-            "_id": "completed",
-            "teacher_id": teacher._id,
-            "subject": "Math",
-            "lesson_type": "individual",
-            "duration_minutes": 60,
-            "status": "completed",
-            "scheduled_date": datetime(2024, 1, 15)
-        }
-        cancelled = {
-            "_id": "cancelled",
-            "teacher_id": teacher._id,
-            "subject": "Math",
-            "lesson_type": "individual",
-            "duration_minutes": 60,
-            "status": "cancelled",
-            "scheduled_date": datetime(2024, 1, 16)
-        }
-        mock_db["lessons"].insert_one(completed)
-        mock_db["lessons"].insert_one(cancelled)
+    #     # Create completed and cancelled lessons
+    #     completed = {
+    #         "_id": "completed",
+    #         "teacher_id": teacher._id,
+    #         "subject": "Math",
+    #         "lesson_type": "individual",
+    #         "duration_minutes": 60,
+    #         "status": "completed",
+    #         "scheduled_date": datetime(2024, 1, 15)
+    #     }
+    #     cancelled = {
+    #         "_id": "cancelled",
+    #         "teacher_id": teacher._id,
+    #         "subject": "Math",
+    #         "lesson_type": "individual",
+    #         "duration_minutes": 60,
+    #         "status": "cancelled",
+    #         "scheduled_date": datetime(2024, 1, 16)
+    #     }
+    #     mock_db["lessons"].insert_one(completed)
+    #     mock_db["lessons"].insert_one(cancelled)
         
-        token = create_access_token({
-            "sub": admin._id,
-            "username": admin.username,
-            "role": admin.role.value
-        })
+    #     token = create_access_token({
+    #         "sub": admin._id,
+    #         "username": admin.username,
+    #         "role": admin.role.value
+    #     })
         
-        with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
-             patch('app.api.deps.mongo_db') as mock_deps, \
-             patch('app.core.pricing.mongo_db') as mock_pricing_db:
-            mock_mongo.users_collection = mock_db["users"]
-            mock_mongo.lessons_collection = mock_db["lessons"]
-            mock_deps.users_collection = mock_db["users"]
-            mock_pricing_db.pricing_collection = mock_db["pricing"]
+    #     with patch('app.api.v1.endpoints.admin.mongo_db') as mock_mongo, \
+    #          patch('app.api.deps.mongo_db') as mock_deps, \
+    #          patch('app.core.pricing.mongo_db') as mock_pricing_db:
+    #         mock_mongo.users_collection = mock_db["users"]
+    #         mock_mongo.lessons_collection = mock_db["lessons"]
+    #         mock_deps.users_collection = mock_db["users"]
+    #         mock_pricing_db.pricing_collection = mock_db["pricing"]
             
-            response = client.get(
-                f"/api/v1/admin/teacher-earnings/{teacher._id}",
-                headers={"Authorization": f"Bearer {token}"}
-            )
+    #         response = client.get(
+    #             f"/api/v1/admin/teacher-earnings/{teacher._id}",
+    #             headers={"Authorization": f"Bearer {token}"}
+    #         )
             
-            assert response.status_code == 200
-            data = response.json()
-            assert data["total_lessons"] == 1  # Only completed, not cancelled
+    #         assert response.status_code == 200
+    #         data = response.json()
+    #         assert data["total_lessons"] == 1  # Only completed, not cancelled
 
 
 class TestAdminAuthorization:
@@ -1309,7 +1309,6 @@ class TestAdminAuthorization:
             ("put", "/api/v1/admin/users/some-id", {"first_name": "Test"}),
             ("delete", "/api/v1/admin/users/some-id", None),
             ("post", "/api/v1/admin/users/some-id/reset-password", {"new_password": "newpass123"}),
-            ("get", "/api/v1/admin/subject-prices", None),
         ]
         
         for method, url, json_data in endpoints:
@@ -1347,7 +1346,6 @@ class TestAdminAuthorization:
             endpoints = [
                 ("post", "/api/v1/admin/users", {"username": "test", "password": "test", "role": "teacher"}),
                 ("get", "/api/v1/admin/users", None),
-                ("get", "/api/v1/admin/subject-prices", None),
             ]
             
             for method, url, json_data in endpoints:

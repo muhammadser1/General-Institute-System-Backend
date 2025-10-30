@@ -14,10 +14,19 @@ class LessonType(str, Enum):
 
 
 class LessonStatus(str, Enum):
-    """Simplified lesson life cycle."""
-    PENDING = "pending"      # Scheduled lesson, not yet completed
-    COMPLETED = "completed"  # Lesson finished
-    CANCELLED = "cancelled"  # Soft deleted or cancelled
+    """Lesson life cycle."""
+    PENDING = "pending"      # Waiting for admin approval
+    APPROVED = "approved"       # Admin approved the lesson
+    REJECTED = "rejected"     # Admin rejected the lesson
+    COMPLETED = "completed"   # Lesson finished
+    CANCELLED = "cancelled"   # Soft deleted or cancelled
+
+
+class EducationLevel(str, Enum):
+    """Education levels for lessons and pricing"""
+    ELEMENTARY = "elementary"  # ابتدائي
+    MIDDLE = "middle"  # اعدادي
+    SECONDARY = "secondary"  # ثانوي
 
 
 # -----------------------------------------------------------
@@ -34,9 +43,8 @@ class StudentInfo(BaseModel):
 # -----------------------------------------------------------
 class LessonBase(BaseModel):
     """Base lesson information shared by all models."""
-    title: str = Field(..., min_length=1, max_length=200)
     subject: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = None
+    education_level: EducationLevel = Field(..., description="Education level (elementary, middle, secondary)")
     lesson_type: LessonType
     scheduled_date: datetime
     duration_minutes: int = Field(..., gt=0, le=480)  # 1–480 min
@@ -47,22 +55,17 @@ class LessonCreate(LessonBase):
     """Used to create a new lesson."""
     teacher_id: Optional[str] = None
     students: Optional[List[StudentInfo]] = Field(default_factory=list)
-    notes: Optional[str] = None
-    homework: Optional[str] = None
 
 
 class LessonUpdate(BaseModel):
     """Used to edit lesson info or mark status. Can only update if NOT completed."""
-    title: Optional[str] = None
-    description: Optional[str] = None
     subject: Optional[str] = None
+    education_level: Optional[EducationLevel] = None
     scheduled_date: Optional[datetime] = None
     duration_minutes: Optional[int] = Field(None, gt=0, le=480)
     max_students: Optional[int] = Field(None, gt=0)
     students: Optional[List[StudentInfo]] = None
     status: Optional[LessonStatus] = None
-    notes: Optional[str] = None
-    homework: Optional[str] = None
 
 
 class LessonResponse(LessonBase):
@@ -72,8 +75,6 @@ class LessonResponse(LessonBase):
     teacher_name: str
     status: LessonStatus
     students: List[StudentInfo] = Field(default_factory=list)
-    notes: Optional[str] = None
-    homework: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

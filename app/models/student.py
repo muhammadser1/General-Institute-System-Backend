@@ -4,6 +4,7 @@ Student Model - Represents students in the system
 from datetime import datetime
 from typing import Optional, Dict, Any
 import uuid
+from app.models.lesson import EducationLevel
 
 
 class Student:
@@ -14,9 +15,8 @@ class Student:
     def __init__(
         self,
         full_name: str,
-        email: Optional[str] = None,
         phone: Optional[str] = None,
-        birthdate: Optional[datetime] = None,
+        education_level: Optional[EducationLevel] = None,
         notes: Optional[str] = None,
         is_active: bool = True,
         _id: Optional[str] = None,
@@ -25,9 +25,8 @@ class Student:
     ):
         self._id = _id or str(uuid.uuid4())
         self.full_name = full_name
-        self.email = email
         self.phone = phone
-        self.birthdate = birthdate
+        self.education_level = education_level
         self.notes = notes
         self.is_active = is_active
         self.created_at = created_at or datetime.utcnow()
@@ -35,12 +34,12 @@ class Student:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert Student object to dictionary for MongoDB insertion"""
+        education_level_value = self.education_level.value if isinstance(self.education_level, EducationLevel) else self.education_level
         return {
             "_id": self._id,
             "full_name": self.full_name,
-            "email": self.email,
             "phone": self.phone,
-            "birthdate": self.birthdate,
+            "education_level": education_level_value,
             "notes": self.notes,
             "is_active": self.is_active,
             "created_at": self.created_at,
@@ -50,12 +49,18 @@ class Student:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Student":
         """Create Student object from MongoDB document"""
+        education_level = data.get("education_level")
+        if education_level:
+            try:
+                education_level = EducationLevel(education_level)
+            except ValueError:
+                education_level = None
+        
         return cls(
             _id=data.get("_id"),
             full_name=data.get("full_name"),
-            email=data.get("email"),
             phone=data.get("phone"),
-            birthdate=data.get("birthdate"),
+            education_level=education_level,
             notes=data.get("notes"),
             is_active=data.get("is_active", True),
             created_at=data.get("created_at"),

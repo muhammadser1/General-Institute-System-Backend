@@ -26,21 +26,11 @@ def create_student(
     """
     Admin creates a new student
     """
-    # Check if student with same email already exists (if email provided)
-    if student_data.email:
-        existing_student = Student.find_by_email(student_data.email, mongo_db.students_collection)
-        if existing_student:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Student with email '{student_data.email}' already exists"
-            )
-    
     # Create student
     new_student = Student(
         full_name=student_data.full_name,
-        email=student_data.email,
         phone=student_data.phone,
-        birthdate=student_data.birthdate,
+        education_level=student_data.education_level,
         notes=student_data.notes
     )
     
@@ -49,9 +39,8 @@ def create_student(
     return StudentResponse(
         id=new_student._id,
         full_name=new_student.full_name,
-        email=new_student.email,
         phone=new_student.phone,
-        birthdate=new_student.birthdate,
+        education_level=new_student.education_level,
         notes=new_student.notes,
         is_active=new_student.is_active,
         created_at=new_student.created_at,
@@ -78,9 +67,8 @@ def get_all_students(
         StudentResponse(
             id=s._id,
             full_name=s.full_name,
-            email=s.email,
             phone=s.phone,
-            birthdate=s.birthdate,
+            education_level=s.education_level,
             notes=s.notes,
             is_active=s.is_active,
             created_at=s.created_at,
@@ -111,9 +99,8 @@ def search_students(
         StudentResponse(
             id=s._id,
             full_name=s.full_name,
-            email=s.email,
             phone=s.phone,
-            birthdate=s.birthdate,
+            education_level=s.education_level,
             notes=s.notes,
             is_active=s.is_active,
             created_at=s.created_at,
@@ -148,9 +135,8 @@ def get_student_by_id(
     return StudentResponse(
         id=student._id,
         full_name=student.full_name,
-        email=student.email,
         phone=student.phone,
-        birthdate=student.birthdate,
+        education_level=student.education_level,
         notes=student.notes,
         is_active=student.is_active,
         created_at=student.created_at,
@@ -175,15 +161,6 @@ def update_student(
             detail="Student not found"
         )
     
-    # Check email uniqueness if updating email
-    if student_update.email and student_update.email != student.email:
-        existing_student = Student.find_by_email(student_update.email, mongo_db.students_collection)
-        if existing_student:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Student with email '{student_update.email}' already exists"
-            )
-    
     # Update fields
     update_data = student_update.model_dump(exclude_unset=True)
     
@@ -196,9 +173,8 @@ def update_student(
     return StudentResponse(
         id=student._id,
         full_name=student.full_name,
-        email=student.email,
         phone=student.phone,
-        birthdate=student.birthdate,
+        education_level=student.education_level,
         notes=student.notes,
         is_active=student.is_active,
         created_at=student.created_at,

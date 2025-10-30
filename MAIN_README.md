@@ -26,6 +26,9 @@ uvicorn app.main:app --reload
 ```
 
 
+## 🧪 Testing
+
+```bash
 # Run all tests (user + admin)
 pytest
 
@@ -34,3 +37,4 @@ pytest tests/admin/ -v
 
 # Run with coverage
 pytest --cov=app --cov-report=html
+```

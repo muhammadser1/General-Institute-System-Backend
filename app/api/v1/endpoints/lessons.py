@@ -36,17 +36,14 @@ def submit_lesson(
     new_lesson = Lesson(
         teacher_id=str(current_user["_id"]),
         teacher_name=teacher_name,
-        title=lesson_data.title,
-        description=lesson_data.description,
         lesson_type=lesson_data.lesson_type,
         subject=lesson_data.subject,
+        education_level=lesson_data.education_level,
         scheduled_date=lesson_data.scheduled_date,
         duration_minutes=lesson_data.duration_minutes,
         max_students=lesson_data.max_students,
         status=LessonStatus.PENDING,
         students=[student.model_dump() for student in (lesson_data.students or [])],
-        notes=lesson_data.notes,
-        homework=lesson_data.homework,
     )
     
     # Save to database using model method
@@ -56,24 +53,21 @@ def submit_lesson(
         id=new_lesson._id,
         teacher_id=new_lesson.teacher_id,
         teacher_name=new_lesson.teacher_name,
-        title=new_lesson.title,
-        description=new_lesson.description,
         lesson_type=new_lesson.lesson_type,
         subject=new_lesson.subject,
+        education_level=new_lesson.education_level,
         scheduled_date=new_lesson.scheduled_date,
         duration_minutes=new_lesson.duration_minutes,
         max_students=new_lesson.max_students,
         status=new_lesson.status,
         students=[StudentInfo(**s) for s in new_lesson.students],
-        notes=new_lesson.notes,
-        homework=new_lesson.homework,
         created_at=new_lesson.created_at,
         updated_at=new_lesson.updated_at,
         completed_at=new_lesson.completed_at,
     )
 
 
-@router.get("/my-lessons", response_model=LessonsStatsResponse)
+@router.get("/my-lessons", response_model=Dict)
 def get_my_lessons(
     current_user: Dict = Depends(get_current_teacher),
     lesson_type: Optional[str] = Query(None, description="Filter by: individual or group"),
@@ -85,9 +79,9 @@ def get_my_lessons(
     limit: int = Query(100, ge=1, le=1000),
 ):
     """
-    Teacher gets their own lessons with filters and total hours
+    Teacher gets their own lessons with filters and statistics
     - Filter by: type (individual/group), status, student name, month, year
-    - Returns: lessons + total_lessons + total_hours
+    - Returns: lessons + total_lessons + total_hours + individual/group breakdown
     """
     query = {"teacher_id": str(current_user["_id"])}
     
@@ -124,23 +118,35 @@ def get_my_lessons(
     # Calculate total hours using model method
     total_hours = Lesson.calculate_total_hours(lessons)
     
+    # Calculate individual vs group statistics
+    individual_hours = 0.0
+    group_hours = 0.0
+    individual_count = 0
+    group_count = 0
+    
+    for lesson in lessons:
+        hours = lesson.get_duration_hours()
+        if lesson.lesson_type.value == "individual":
+            individual_hours += hours
+            individual_count += 1
+        else:
+            group_hours += hours
+            group_count += 1
+    
     # Convert to response
     lesson_responses = [
         LessonResponse(
             id=lesson._id,
             teacher_id=lesson.teacher_id,
             teacher_name=lesson.teacher_name,
-            title=lesson.title,
-            description=lesson.description,
             lesson_type=lesson.lesson_type,
             subject=lesson.subject,
+            education_level=lesson.education_level,
             scheduled_date=lesson.scheduled_date,
             duration_minutes=lesson.duration_minutes,
             max_students=lesson.max_students,
             status=lesson.status,
             students=[StudentInfo(**s) for s in lesson.students],
-            notes=lesson.notes,
-            homework=lesson.homework,
             created_at=lesson.created_at,
             updated_at=lesson.updated_at,
             completed_at=lesson.completed_at,
@@ -148,11 +154,22 @@ def get_my_lessons(
         for lesson in lessons
     ]
     
-    return LessonsStatsResponse(
-        total_lessons=len(lessons),
-        total_hours=total_hours,
-        lessons=lesson_responses
-    )
+    # Build extended response with breakdown
+    response = {
+        "total_lessons": len(lessons),
+        "total_hours": round(total_hours, 2),
+        "individual": {
+            "lessons": individual_count,
+            "hours": round(individual_hours, 2)
+        },
+        "group": {
+            "lessons": group_count,
+            "hours": round(group_hours, 2)
+        },
+        "lessons": lesson_responses
+    }
+    
+    return response
 
 
 @router.get("/summary", response_model=Dict)
@@ -328,17 +345,14 @@ def update_lesson(
         id=updated_lesson._id,
         teacher_id=updated_lesson.teacher_id,
         teacher_name=updated_lesson.teacher_name,
-        title=updated_lesson.title,
-        description=updated_lesson.description,
         lesson_type=updated_lesson.lesson_type,
         subject=updated_lesson.subject,
+        education_level=updated_lesson.education_level,
         scheduled_date=updated_lesson.scheduled_date,
         duration_minutes=updated_lesson.duration_minutes,
         max_students=updated_lesson.max_students,
         status=updated_lesson.status,
         students=[StudentInfo(**s) for s in updated_lesson.students],
-        notes=updated_lesson.notes,
-        homework=updated_lesson.homework,
         created_at=updated_lesson.created_at,
         updated_at=updated_lesson.updated_at,
         completed_at=updated_lesson.completed_at,
@@ -413,18 +427,196 @@ def get_lesson_by_id(
         id=lesson._id,
         teacher_id=lesson.teacher_id,
         teacher_name=lesson.teacher_name,
-        title=lesson.title,
-        description=lesson.description,
         lesson_type=lesson.lesson_type,
         subject=lesson.subject,
+        education_level=lesson.education_level,
         scheduled_date=lesson.scheduled_date,
         duration_minutes=lesson.duration_minutes,
         max_students=lesson.max_students,
         status=lesson.status,
         students=[StudentInfo(**s) for s in lesson.students],
-        notes=lesson.notes,
-        homework=lesson.homework,
         created_at=lesson.created_at,
         updated_at=lesson.updated_at,
         completed_at=lesson.completed_at,
+    )
+
+
+# ==================== ADMIN ENDPOINTS ====================
+
+@router.get("/admin/all", response_model=LessonsStatsResponse)
+def get_all_lessons_admin(
+    current_admin: Dict = Depends(get_current_admin),
+    teacher_id: Optional[str] = Query(None, description="Filter by teacher ID"),
+    student_name: Optional[str] = Query(None, description="Filter by student name"),
+    status: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected, completed, cancelled)"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month (1-12)"),
+    year: Optional[int] = Query(None, ge=2000, le=2100, description="Filter by year"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """
+    Admin views all lessons with filters
+    - Filter by teacher, student name, status, month, year
+    - Returns all lessons with total count and hours
+    """
+    query = {}
+    
+    # Teacher filter
+    if teacher_id:
+        query["teacher_id"] = teacher_id
+    
+    # Status filter
+    if status:
+        query["status"] = status
+    
+    # Student name filter
+    if student_name:
+        query["students.student_name"] = {"$regex": student_name, "$options": "i"}
+    
+    # Date filter
+    if month or year:
+        date_query = {}
+        if year:
+            date_query["$gte"] = datetime(year, month or 1, 1)
+            if month:
+                if month == 12:
+                    date_query["$lt"] = datetime(year + 1, 1, 1)
+                else:
+                    date_query["$lt"] = datetime(year, month + 1, 1)
+            else:
+                date_query["$lt"] = datetime(year + 1, 1, 1)
+        query["scheduled_date"] = date_query
+    
+    # Get lessons
+    lessons_docs = list(mongo_db.lessons_collection.find(query).skip(skip).limit(limit).sort("scheduled_date", -1))
+    lessons = [Lesson.from_dict(doc) for doc in lessons_docs]
+    
+    # Calculate total hours
+    total_hours = Lesson.calculate_total_hours(lessons)
+    
+    # Convert to response
+    lesson_responses = [
+        LessonResponse(
+            id=lesson._id,
+            teacher_id=lesson.teacher_id,
+            teacher_name=lesson.teacher_name,
+            lesson_type=lesson.lesson_type,
+            subject=lesson.subject,
+            education_level=lesson.education_level,
+            scheduled_date=lesson.scheduled_date,
+            duration_minutes=lesson.duration_minutes,
+            max_students=lesson.max_students,
+            status=lesson.status,
+            students=[StudentInfo(**s) for s in lesson.students],
+            created_at=lesson.created_at,
+            updated_at=lesson.updated_at,
+            completed_at=lesson.completed_at,
+        )
+        for lesson in lessons
+    ]
+    
+    return LessonsStatsResponse(
+        total_lessons=len(lessons),
+        total_hours=total_hours,
+        lessons=lesson_responses
+    )
+
+
+@router.put("/admin/approve/{lesson_id}", response_model=LessonResponse)
+def approve_lesson(
+    lesson_id: str,
+    current_admin: Dict = Depends(get_current_admin)
+):
+    """
+    Admin approves a pending lesson
+    """
+    lesson = Lesson.find_by_id(lesson_id, mongo_db.lessons_collection)
+    
+    if not lesson:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lesson not found",
+        )
+    
+    if not lesson.is_pending():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot approve {lesson.status.value} lesson. Only pending lessons can be approved.",
+        )
+    
+    # Approve lesson
+    lesson.approve()
+    lesson.update_in_db(mongo_db.lessons_collection, {
+        "status": lesson.status.value,
+        "updated_at": lesson.updated_at
+    })
+    
+    # Get updated lesson
+    updated_lesson = Lesson.find_by_id(lesson_id, mongo_db.lessons_collection)
+    
+    return LessonResponse(
+        id=updated_lesson._id,
+        teacher_id=updated_lesson.teacher_id,
+        teacher_name=updated_lesson.teacher_name,
+        lesson_type=updated_lesson.lesson_type,
+        subject=updated_lesson.subject,
+        education_level=updated_lesson.education_level,
+        scheduled_date=updated_lesson.scheduled_date,
+        duration_minutes=updated_lesson.duration_minutes,
+        max_students=updated_lesson.max_students,
+        status=updated_lesson.status,
+        students=[StudentInfo(**s) for s in updated_lesson.students],
+        created_at=updated_lesson.created_at,
+        updated_at=updated_lesson.updated_at,
+        completed_at=updated_lesson.completed_at,
+    )
+
+
+@router.put("/admin/reject/{lesson_id}", response_model=LessonResponse)
+def reject_lesson(
+    lesson_id: str,
+    current_admin: Dict = Depends(get_current_admin)
+):
+    """
+    Admin rejects a pending lesson
+    """
+    lesson = Lesson.find_by_id(lesson_id, mongo_db.lessons_collection)
+    
+    if not lesson:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lesson not found",
+        )
+    
+    if not lesson.is_pending():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot reject {lesson.status.value} lesson. Only pending lessons can be rejected.",
+        )
+    
+    # Reject lesson
+    lesson.reject()
+    lesson.update_in_db(mongo_db.lessons_collection, {
+        "status": lesson.status.value,
+        "updated_at": lesson.updated_at
+    })
+    
+    # Get updated lesson
+    updated_lesson = Lesson.find_by_id(lesson_id, mongo_db.lessons_collection)
+    
+    return LessonResponse(
+        id=updated_lesson._id,
+        teacher_id=updated_lesson.teacher_id,
+        teacher_name=updated_lesson.teacher_name,
+        lesson_type=updated_lesson.lesson_type,
+        subject=updated_lesson.subject,
+        education_level=updated_lesson.education_level,
+        scheduled_date=updated_lesson.scheduled_date,
+        duration_minutes=updated_lesson.duration_minutes,
+        max_students=updated_lesson.max_students,
+        status=updated_lesson.status,
+        students=[StudentInfo(**s) for s in updated_lesson.students],
+        created_at=updated_lesson.created_at,
+        updated_at=updated_lesson.updated_at,
+        completed_at=updated_lesson.completed_at,
     )
