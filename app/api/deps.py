@@ -77,6 +77,21 @@ def get_current_teacher(
     return current_user
 
 
+def get_current_admin_or_teacher(
+    current_user: Dict = Depends(get_current_user)
+) -> Dict:
+    """
+    Verify that current user is either an admin or a teacher
+    """
+    role = current_user.get("role")
+    if role not in ["admin", "teacher"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or teacher access required",
+        )
+    return current_user
+
+
 def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)
 ) -> Optional[Dict]:

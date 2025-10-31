@@ -85,6 +85,16 @@ class Student:
         return [Student.from_dict(doc) for doc in student_docs]
     
     @staticmethod
+    def name_exists(name: str, db_collection, exclude_id: Optional[str] = None) -> bool:
+        """Check if student name already exists (case-insensitive exact match)"""
+        query = {
+            "full_name": {"$regex": f"^{name}$", "$options": "i"}
+        }
+        if exclude_id:
+            query["_id"] = {"$ne": exclude_id}
+        return db_collection.find_one(query) is not None
+    
+    @staticmethod
     def find_by_email(email: str, db_collection) -> Optional["Student"]:
         """Find student by email"""
         student_doc = db_collection.find_one({"email": email})

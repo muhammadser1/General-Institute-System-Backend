@@ -10,7 +10,7 @@ from app.schemas.student import (
     StudentListResponse
 )
 from app.models.student import Student
-from app.api.deps import get_current_admin, get_current_user
+from app.api.deps import get_current_admin, get_current_user, get_current_admin_or_teacher
 from app.db import mongo_db
 
 router = APIRouter()
@@ -21,11 +21,18 @@ router = APIRouter()
 @router.post("/", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
 def create_student(
     student_data: StudentCreate,
-    current_admin: Dict = Depends(get_current_admin)
+    current_user: Dict = Depends(get_current_admin_or_teacher)
 ):
     """
-    Admin creates a new student
+    Admin or Teacher creates a new student
     """
+    # Check if student name already exists
+    if Student.name_exists(student_data.full_name, mongo_db.students_collection):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Student with name '{student_data.full_name}' already exists"
+        )
+    
     # Create student
     new_student = Student(
         full_name=student_data.full_name,
@@ -163,6 +170,14 @@ def update_student(
     
     # Update fields
     update_data = student_update.model_dump(exclude_unset=True)
+    
+    # Check if name is being updated and if it already exists
+    if "full_name" in update_data and update_data["full_name"] != student.full_name:
+        if Student.name_exists(update_data["full_name"], mongo_db.students_collection, exclude_id=student_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Student with name '{update_data['full_name']}' already exists"
+            )
     
     for field, value in update_data.items():
         if hasattr(student, field):
