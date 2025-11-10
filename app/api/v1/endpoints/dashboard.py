@@ -11,6 +11,7 @@ from app.models.user import User
 from app.core.pricing import get_subject_price, calculate_subject_earnings
 from datetime import datetime
 from collections import defaultdict
+import re
 
 router = APIRouter()
 
@@ -944,11 +945,12 @@ def get_students_detailed_stats(
             student_education_level = "elementary"  # Default fallback
         
         # Find lessons for this student
+        name_pattern = {"$regex": f"^{re.escape(student_name)}$", "$options": "i"}
         student_lesson_query = {
             **lesson_query,
             "$or": [
-                {"students.student_name": {"$regex": student_name, "$options": "i"}},
-                {"students.student_id": student_id}
+                {"students.student_id": student_id},
+                {"students.student_name": name_pattern}
             ],
             "status": {"$in": ["approved", "completed"]}  # Only count approved or completed lessons
         }
